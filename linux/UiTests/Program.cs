@@ -178,8 +178,10 @@ window.MouseMove(held + new Vector(12, 0), RawInputModifiers.LeftMouseButton);
 window.MouseMove(RightEdge(), RawInputModifiers.LeftMouseButton);
 // The release never arrives, the next move has the button up.
 window.MouseMove(RightEdge() - new Vector(2, 0));
+// Held at the edge until then, it may have scrolled a little; from here on it must not.
+var stoppedAt = timelineScroller.Offset.X;
 ScrollTicks(15);
-Check(timelineScroller.Offset.X == 0 && !autoScroll.IsEnabled, $"a missed release stops it: {timelineScroller.Offset.X}");
+Check(timelineScroller.Offset.X == stoppedAt && !autoScroll.IsEnabled, $"a missed release stops it: {stoppedAt} → {timelineScroller.Offset.X}");
 // Lets the simulated mouse go, and presses elsewhere so that it is not a double click.
 window.MouseUp(RightEdge(), MouseButton.Left);
 Pump();
