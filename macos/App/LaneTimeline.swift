@@ -211,7 +211,7 @@ struct TimelineMetrics: Equatable {
     }
 }
 
-/// Scrolls the timeline while something is dragged near or past the edge of the visible area. A system drag
+/// Scrolls the timeline sideways while something is dragged near or past its left or right edge. A system drag
 /// session delivers no mouse events to the app, so the pointer is read from the window 60 times a second, and the
 /// AppKit scroll view under the SwiftUI one is scrolled directly: SwiftUI reports its scroll offset a frame late,
 /// which made a loop built on it jump back and forth.
@@ -245,16 +245,15 @@ final class TimelineAutoScroller {
         // Window coordinates have their origin at the bottom left.
         let viewport = scrollView.convert(scrollView.bounds, to: nil)
         let pointer = window.mouseLocationOutsideOfEventStream
-        let fromLeft = pointer.x - viewport.minX
+        // Only while the pointer is level with the timeline, give or take a little.
         let fromTop = viewport.maxY - pointer.y
-        let dx = fromTop >= 0 && fromTop <= viewport.height ? speed(fromLeft, length: viewport.width) : 0
-        let dy = fromLeft >= 0 && fromLeft <= viewport.width ? speed(fromTop, length: viewport.height) : 0
-        guard dx != 0 || dy != 0 else { return }
+        guard fromTop >= -40, fromTop <= viewport.height + 40 else { return }
+        let dx = speed(pointer.x - viewport.minX, length: viewport.width)
+        guard dx != 0 else { return }
 
         let clip = scrollView.contentView
         var origin = clip.bounds.origin
         origin.x = min(max(0, origin.x + dx), max(0, document.frame.width - clip.bounds.width))
-        origin.y = min(max(0, origin.y + (document.isFlipped ? dy : -dy)), max(0, document.frame.height - clip.bounds.height))
         guard origin != clip.bounds.origin else { return }
         clip.scroll(to: origin)
         scrollView.reflectScrolledClipView(clip)
