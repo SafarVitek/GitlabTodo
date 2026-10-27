@@ -824,8 +824,6 @@ private struct BlockView: View, Equatable {
                 onSelect()
             }
         })
-        // Starts scrolling the timeline when the drag gets near its edge.
-        .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in scroller.begin() })
         .draggable(block.id)
         .dropDestination(for: String.self) { ids, _ in
             guard let dragged = ids.first, dragged != block.id else { return false }
@@ -837,6 +835,7 @@ private struct BlockView: View, Equatable {
             return true
         } isTargeted: {
             isTargeted = $0
+            // A dragged block is over a drop target right away, which starts scrolling near the edge.
             if $0 {
                 scroller.begin()
             }
