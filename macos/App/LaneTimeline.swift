@@ -212,18 +212,16 @@ struct TimelineMetrics: Equatable {
 }
 
 /// Scrolls the timeline while something is dragged near or past the edge of the visible area. A system drag
-/// session delivers no mouse events to the app, so the pointer is read from the window 60 times a second instead.
+/// session delivers no mouse events to the app, so the pointer is read from the window 60 times a second, and the
+/// AppKit scroll view under the SwiftUI one is scrolled directly: SwiftUI reports its scroll offset a frame late,
+/// which made a loop built on it jump back and forth.
 @MainActor
 @Observable
 final class TimelineAutoScroller {
     private static let edge: CGFloat = 56
     private static let maxStep: CGFloat = 16
 
-    /// The visible part of the timeline in window coordinates, top-left origin.
-    @ObservationIgnored var viewport = CGRect.zero
-    @ObservationIgnored var visible = CGRect.zero
-    @ObservationIgnored var contentSize = CGSize.zero
-    @ObservationIgnored var scrollTo: ((CGPoint) -> Void)?
+    @ObservationIgnored weak var scrollView: NSScrollView?
     @ObservationIgnored private var timer: Timer?
 
     /// Starts following the pointer; stops on its own when the mouse button is released.
@@ -238,23 +236,28 @@ final class TimelineAutoScroller {
     }
 
     private func tick() {
-        guard NSEvent.pressedMouseButtons & 1 != 0, let window = NSApp.keyWindow else {
+        guard NSEvent.pressedMouseButtons & 1 != 0, let scrollView, let window = scrollView.window, let document = scrollView.documentView else {
             timer?.invalidate()
             timer = nil
             return
         }
-        let point = window.mouseLocationOutsideOfEventStream
-        let local = CGPoint(x: point.x - viewport.minX, y: window.frame.height - point.y - viewport.minY)
-        let dx = local.y >= 0 && local.y <= viewport.height ? speed(local.x, length: viewport.width) : 0
-        let dy = local.x >= 0 && local.x <= viewport.width ? speed(local.y, length: viewport.height) : 0
+        NSCursor.closedHand.set()
+        // Window coordinates have their origin at the bottom left.
+        let viewport = scrollView.convert(scrollView.bounds, to: nil)
+        let pointer = window.mouseLocationOutsideOfEventStream
+        let fromLeft = pointer.x - viewport.minX
+        let fromTop = viewport.maxY - pointer.y
+        let dx = fromTop >= 0 && fromTop <= viewport.height ? speed(fromLeft, length: viewport.width) : 0
+        let dy = fromLeft >= 0 && fromLeft <= viewport.width ? speed(fromTop, length: viewport.height) : 0
         guard dx != 0 || dy != 0 else { return }
-        let origin = CGPoint(
-            x: min(max(0, visible.minX + dx), max(0, contentSize.width - visible.width)),
-            y: min(max(0, visible.minY + dy), max(0, contentSize.height - visible.height)))
-        if origin != visible.origin {
-            visible.origin = origin
-            scrollTo?(origin)
-        }
+
+        let clip = scrollView.contentView
+        var origin = clip.bounds.origin
+        origin.x = min(max(0, origin.x + dx), max(0, document.frame.width - clip.bounds.width))
+        origin.y = min(max(0, origin.y + (document.isFlipped ? dy : -dy)), max(0, document.frame.height - clip.bounds.height))
+        guard origin != clip.bounds.origin else { return }
+        clip.scroll(to: origin)
+        scrollView.reflectScrolledClipView(clip)
     }
 
     /// Faster the closer to the edge, full speed at it and beyond.
@@ -268,6 +271,24 @@ final class TimelineAutoScroller {
             return Self.maxStep * closeness * closeness
         }
         return 0
+    }
+}
+
+/// Hands over the AppKit scroll view that SwiftUI's `ScrollView` is built on.
+private struct EnclosingScrollViewReader: NSViewRepresentable {
+    let onFind: (NSScrollView) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        NSView()
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        // Only in the view hierarchy after this update.
+        Task { @MainActor in
+            if let scrollView = view.enclosingScrollView {
+                onFind(scrollView)
+            }
+        }
     }
 }
 
@@ -297,18 +318,11 @@ struct LaneTimeline: View {
         ScrollView([.horizontal, .vertical]) {
             TimelineContent(schedule: schedule, steps: steps, metrics: metrics, selection: $selection)
                 .environment(scroller)
+                .background(EnclosingScrollViewReader { scroller.scrollView = $0 })
         }
         .scrollPosition($position)
-        .onScrollGeometryChange(for: ScrollGeometry.self, of: { $0 }) { _, geometry in
-            visible = geometry.visibleRect
-            scroller.visible = geometry.visibleRect
-            scroller.contentSize = geometry.contentSize
-        }
-        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { frame in
-            scroller.viewport = frame
-        }
-        .onAppear {
-            scroller.scrollTo = { position.scrollTo(point: $0) }
+        .onScrollGeometryChange(for: CGRect.self, of: { $0.visibleRect }) { _, rect in
+            visible = rect
         }
         .simultaneousGesture(
             MagnifyGesture()
@@ -813,6 +827,7 @@ private struct BlockView: View, Equatable {
             }
         }
         .contentShape(shape)
+        .pointerStyle(.grabIdle)
         // One tap gesture, simultaneous so dragging does not swallow it. The event's click count tells a double-click,
         // which opens the item, from a click, which selects it right away.
         .simultaneousGesture(TapGesture().onEnded {
