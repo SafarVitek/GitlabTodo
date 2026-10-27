@@ -27,6 +27,7 @@ public sealed class SettingsWindow : Window
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Paint.Sharpen(this);
         BuildContent();
         // Colors are taken when controls are made, a new theme needs new ones.
         ActualThemeVariantChanged += (_, _) => BuildContent();
@@ -103,7 +104,7 @@ public sealed class SettingsWindow : Window
     public static Control Section(string title, Control content)
     {
         var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(Views.Label(title, 13, Paint.Secondary, FontWeight.SemiBold));
+        panel.Children.Add(Views.SectionTitle(title));
         panel.Children.Add(new Border { Child = content, Padding = new Thickness(14), CornerRadius = new CornerRadius(10), Background = Paint.Primary(0.04) });
         return panel;
     }
@@ -201,6 +202,7 @@ public sealed class AccountEditor : Window
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Paint.Sharpen(this);
         ShowInTaskbar = false;
 
         name.Text = account?.Name ?? "";

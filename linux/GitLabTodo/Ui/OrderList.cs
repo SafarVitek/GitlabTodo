@@ -258,10 +258,13 @@ public sealed class OrderList : Panel
             var panel = new StackPanel();
             if (startsNewItems)
             {
-                var heading = Views.Label("Nezařazené – přetáhni nahoru do pořadí", 12.5, Paint.Headline, FontWeight.Bold);
-                heading.Margin = new Thickness(10, 14, 0, 6);
+                var title = Views.SectionTitle("Nezařazené");
+                title.Foreground = Paint.Headline;
+                var heading = Views.Row(8, title, Views.Label("přetáhni nahoru do pořadí", 11.5, Paint.Tertiary));
+                heading.Margin = new Thickness(12, 16, 0, 4);
+                heading.Height = 17;
                 panel.Children.Add(heading);
-                RowTop = 14 + 6 + 17;
+                RowTop = 16 + 4 + 17;
             }
 
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 10 };

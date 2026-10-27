@@ -79,4 +79,5 @@ větví a merge requestů.
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](LICENSE). Ikony linuxové verze jsou z [Lucide](https://lucide.dev) (ISC), viz
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

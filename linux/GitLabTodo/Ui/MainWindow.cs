@@ -41,6 +41,7 @@ public sealed class MainWindow : Window
         MinWidth = 860;
         MinHeight = 440;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Paint.Sharpen(this);
 
         BuildContent();
         state.Changed += ScheduleUpdate;
@@ -122,7 +123,7 @@ public sealed class MainWindow : Window
             zoomControls,
             refresh,
             Views.IconButton(IconKind.Gear, "Nastavení (Ctrl ,)", shell.ShowSettings),
-            Views.IconButton(IconKind.Sidebar, "Detail", () =>
+            Views.IconButton(IconKind.Sidebar, "Zobrazit nebo skrýt detail", () =>
             {
                 showsInspector = !showsInspector;
                 inspectorPane.IsVisible = showsInspector;

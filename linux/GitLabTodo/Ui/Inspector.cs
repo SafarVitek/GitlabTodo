@@ -55,7 +55,7 @@ public sealed class Inspector : Panel
         noteRow.Children.Add(noteIcon);
         noteRow.Children.Add(note);
         var wait = new StackPanel { Spacing = 8 };
-        wait.Children.Add(Views.SectionTitle("Čeká na", IconKind.Pause));
+        wait.Children.Add(Views.SectionTitle("Čeká na"));
         wait.Children.Add(blockers);
         wait.Children.Add(Views.Box(search));
         wait.Children.Add(Views.Box(noteRow));
@@ -116,14 +116,19 @@ public sealed class Inspector : Panel
         var top = new DockPanel();
         DockPanel.SetDock(open, Dock.Right);
         top.Children.Add(open);
-        top.Children.Add(Views.Row(6,
-            new StageCircle(shown, 15),
-            Views.Label(shown.Stage == ItemKind.Issue ? "Issue" : "Merge request", 12, Paint.Kind(shown.Stage), FontWeight.SemiBold),
-            Views.Label("·", 12, Paint.Tertiary),
-            Views.ProjectLabel(shown, maxWidth: 160)));
+        // What it is as a tinted pill, then the project.
+        var kind = new Border
+        {
+            Child = Views.Row(5, new StageCircle(shown, 12), Views.Label(shown.Stage == ItemKind.Issue ? "Issue" : "Merge request", 11.5, Paint.Kind(shown.Stage), FontWeight.SemiBold)),
+            Background = Paint.Kind(shown.Stage, Paint.IsDark ? 0.2 : 0.1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(6, 2, 8, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        top.Children.Add(Views.Row(8, kind, Views.ProjectLabel(shown, maxWidth: 160)));
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(top);
-        panel.Children.Add(new SelectableTextBlock { Text = shown.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new SelectableTextBlock { Text = shown.Title, FontSize = 18, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, LineHeight = 24 });
         panel.Children.Add(Meta(shown));
         return panel;
     }
@@ -156,7 +161,7 @@ public sealed class Inspector : Panel
         row.Children.Add(buttons);
         row.Children.Add(Views.Label(position, 13.5, weight: FontWeight.Medium));
         var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(Views.SectionTitle("Pořadí", IconKind.Tray));
+        panel.Children.Add(Views.SectionTitle("Pořadí"));
         panel.Children.Add(row);
         panel.Children.Add(Hint("Jinak pořadí měníš přetažením v seznamu."));
         return panel;
@@ -224,7 +229,13 @@ public sealed class Inspector : Panel
         var top = new DockPanel();
         if (request.Id != shown.Id)
         {
-            var open = new Button { Content = "Otevřít", FontSize = 12, Padding = new Thickness(10, 2) };
+            var open = new Button
+            {
+                Content = Views.Row(4, new Icon(IconKind.ExternalLink, Paint.AccentBrush(), 13), Views.Label("Otevřít", 12, Paint.AccentBrush(), FontWeight.Medium)),
+                Padding = new Thickness(6, 2),
+                Classes = { "subtle" },
+            };
+            ToolTip.SetTip(open, "Otevřít MR v GitLabu");
             open.Click += (_, _) => state.Ui.Open(request.WebUrl);
             DockPanel.SetDock(open, Dock.Right);
             top.Children.Add(open);
@@ -264,7 +275,7 @@ public sealed class Inspector : Panel
             box.Children.Add(row);
         }
         var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(Views.SectionTitle("Merge request", IconKind.Merge));
+        panel.Children.Add(Views.SectionTitle("Merge request"));
         panel.Children.Add(Views.Box(box));
         return panel;
     }

@@ -64,6 +64,15 @@ void Drag(Point from, Point to)
 List<Control> Rows() => window.GetVisualDescendants().OfType<Control>().Where(c => c.GetType().Name == "Row" && c.IsEffectivelyVisible).ToList();
 Segmented Mode() => window.GetVisualDescendants().OfType<Segmented>().First();
 
+// Every button that is only an icon says what it does in a tooltip.
+void CheckIconTips(Visual root, string where)
+{
+    var icons = root.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible && b.Content is Icon or StageCircle).ToList();
+    var silent = icons.Count(b => ToolTip.GetTip(b) is null);
+    Check(icons.Count > 0 && silent == 0, $"icon buttons in {where} have tooltips: {icons.Count - silent} of {icons.Count}");
+}
+CheckIconTips(window, "the list");
+
 // Sidebar: a click on an entry filters the list. Rebuilding the old list box inside its selection event crashed the app.
 foreach (var (name, count) in new[] { ("backend", 4), ("Čeká", 4), ("infra", 2), ("Vše", 11) })
 {
@@ -106,6 +115,7 @@ Pump();
 // Timeline.
 Mode().Select(1, notify: true);
 Pump();
+CheckIconTips(window, "the timeline");
 var canvas = window.GetVisualDescendants().OfType<Control>().First(c => c.GetType().Name == "TimelineCanvas");
 var metrics = new TimelineMetrics(state.TimelineZoom);
 (int Lane, TimelineBlock Block) Find(string reference)
@@ -215,6 +225,7 @@ Pump();
 Check(state.Theme == "light" && Application.Current.ActualThemeVariant == ThemeVariant.Light && Rows().Count == 11, "light theme picked, the window rebuilt for it");
 
 // Sync: a GitLab and a repository, applied; „Vypnuto“ turns it off again.
+CheckIconTips(settings, "the settings");
 var syncSection = settings.GetVisualDescendants().OfType<SyncSection>().First();
 var gitLabPicker = syncSection.GetVisualDescendants().OfType<ComboBox>().First();
 gitLabPicker.SelectedIndex = 1;

@@ -409,7 +409,16 @@ public static class Views
         Background = Paint.Surface,
     };
 
-    public static Control SectionTitle(string title, IconKind icon) => IconLabel(icon, title, Paint.Secondary, 13, FontWeight.SemiBold);
+    /// Small capitals above a section, quieter than the content under them.
+    public static TextBlock SectionTitle(string title) => new()
+    {
+        Text = title.ToUpperInvariant(),
+        FontSize = 11,
+        FontWeight = FontWeight.SemiBold,
+        LetterSpacing = 0.6,
+        Foreground = Paint.Tertiary,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
 
     /// A big symbol and a line of text where a list is empty.
     public static Control Placeholder(IconKind icon, string title, string? detail = null)

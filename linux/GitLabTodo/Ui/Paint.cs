@@ -55,6 +55,9 @@ public static class Paint
 
     public static IBrush Project(int index) => Brush(Palette.Project(index));
 
+    /// Subpixel antialiased text, sharper on the ordinary low-density screens common on Linux desktops.
+    public static void Sharpen(Visual visual) => RenderOptions.SetTextRenderingMode(visual, TextRenderingMode.SubpixelAntialias);
+
     /// `#RRGGBB` from GitLab, or `fallback` when it is something else.
     public static Color Hex(string hex, Color fallback) => Color.TryParse(hex, out var color) ? color : fallback;
 }

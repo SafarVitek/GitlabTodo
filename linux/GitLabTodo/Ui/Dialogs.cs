@@ -20,6 +20,7 @@ public sealed class MessageDialog : Window
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Paint.Sharpen(this);
         ShowInTaskbar = false;
         result = buttons.Count - 1;
 

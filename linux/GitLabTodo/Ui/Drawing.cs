@@ -42,14 +42,53 @@ public enum IconKind
     Checklist,
     Checkbox,
     CheckboxChecked,
+    Power,
+    Repository,
 }
 
-/// Icons drawn as vectors on a 16 × 16 grid, sharp at any size and zoom. In the spirit of the SF Symbols the macOS
-/// app uses, without bundling an icon font.
+/// Interface icons from Lucide; the filled status marks, the merge glyph and the check boxes are drawn here on a
+/// 16 × 16 grid, sharp at any size and zoom.
 public static class Icons
 {
+    private static readonly Dictionary<IconKind, string> Lucide = new()
+    {
+        [IconKind.Plus] = "plus",
+        [IconKind.PlusCircle] = "circle-plus",
+        [IconKind.Close] = "x",
+        [IconKind.Check] = "check",
+        [IconKind.CheckCircle] = "circle-check",
+        [IconKind.Pause] = "circle-pause",
+        [IconKind.Clock] = "clock",
+        [IconKind.Refresh] = "refresh-cw",
+        [IconKind.Gear] = "settings",
+        [IconKind.Sidebar] = "panel-right",
+        [IconKind.ZoomIn] = "zoom-in",
+        [IconKind.ZoomOut] = "zoom-out",
+        [IconKind.ExternalLink] = "external-link",
+        [IconKind.Copy] = "copy",
+        [IconKind.TextBubble] = "message-square-text",
+        [IconKind.Branch] = "git-branch",
+        [IconKind.Calendar] = "calendar",
+        [IconKind.Person] = "circle-user-round",
+        [IconKind.Tray] = "inbox",
+        [IconKind.Search] = "search",
+        [IconKind.ToTop] = "arrow-up-to-line",
+        [IconKind.ToBottom] = "arrow-down-to-line",
+        [IconKind.Server] = "server",
+        [IconKind.Trash] = "trash-2",
+        [IconKind.Note] = "notepad-text",
+        [IconKind.Checklist] = "list-checks",
+        [IconKind.Power] = "power",
+        [IconKind.Repository] = "folder-git-2",
+    };
+
     public static void Draw(DrawingContext context, IconKind kind, Rect rect, IBrush brush, IBrush? contrast = null)
     {
+        if (Lucide.TryGetValue(kind, out var name))
+        {
+            LucideIcons.Draw(context, name, rect, brush);
+            return;
+        }
         var scale = Math.Min(rect.Width, rect.Height) / 16;
         var origin = new Point(rect.X + (rect.Width - 16 * scale) / 2, rect.Y + (rect.Height - 16 * scale) / 2);
         Point P(double x, double y) => new(origin.X + x * scale, origin.Y + y * scale);
@@ -60,8 +99,6 @@ public static class Icons
 
         void Line(Pen p, double x1, double y1, double x2, double y2) => context.DrawLine(p, P(x1, y1), P(x2, y2));
         void Circle(IBrush? fill, Pen? p, double x, double y, double r) => context.DrawEllipse(fill, p, P(x, y), r * scale, r * scale);
-        void Box(Pen p, double x1, double y1, double x2, double y2, double r) =>
-            context.DrawRectangle(null, p, new RoundedRect(new Rect(P(x1, y1), P(x2, y2)), r * scale));
         void Path(IBrush? fill, Pen? p, bool closed, params Point[] points)
         {
             var geometry = new StreamGeometry();
@@ -76,42 +113,13 @@ public static class Icons
             }
             context.DrawGeometry(fill, p, geometry);
         }
-        void Magnifier()
-        {
-            Circle(null, pen, 7, 7, 4.5);
-            Line(pen, 10.4, 10.4, 14, 14);
-        }
 
         switch (kind)
         {
-            case IconKind.Plus:
-                Line(pen, 8, 3, 8, 13);
-                Line(pen, 3, 8, 13, 8);
-                break;
-            case IconKind.PlusCircle:
-                Circle(null, thin, 8, 8, 6.5);
-                Line(thin, 8, 5, 8, 11);
-                Line(thin, 5, 8, 11, 8);
-                break;
-            case IconKind.Close:
-                Line(pen, 4, 4, 12, 12);
-                Line(pen, 12, 4, 4, 12);
-                break;
             case IconKind.CloseCircleFilled:
                 Circle(brush, null, 8, 8, 7);
                 Line(cut, 5.5, 5.5, 10.5, 10.5);
                 Line(cut, 10.5, 5.5, 5.5, 10.5);
-                break;
-            case IconKind.Check:
-                Path(null, pen, false, new(3, 8.5), new(6.5, 12), new(13, 4.5));
-                break;
-            case IconKind.CheckCircle:
-                Circle(null, thin, 8, 8, 6.5);
-                Path(null, thin, false, new(5, 8.3), new(7.2, 10.5), new(11, 5.8));
-                break;
-            case IconKind.Pause:
-                Line(pen, 6, 4, 6, 12);
-                Line(pen, 10, 4, 10, 12);
                 break;
             case IconKind.PauseCircleFilled:
                 Circle(brush, null, 8, 8, 7);
@@ -122,57 +130,6 @@ public static class Icons
                 Circle(brush, null, 8, 8, 7);
                 Path(contrast, null, true, new(6.4, 4.9), new(11.2, 8), new(6.4, 11.1));
                 break;
-            case IconKind.Clock:
-                Circle(null, thin, 8, 8, 6.5);
-                Path(null, thin, false, new(8, 4.5), new(8, 8), new(10.5, 9.5));
-                break;
-            case IconKind.Refresh:
-            {
-                var geometry = new StreamGeometry();
-                using (var g = geometry.Open())
-                {
-                    g.BeginFigure(P(8, 2.5), false);
-                    g.ArcTo(P(3.24, 5.25), new Size(5.5 * scale, 5.5 * scale), 0, true, SweepDirection.Clockwise);
-                    g.EndFigure(false);
-                }
-                context.DrawGeometry(null, pen, geometry);
-                Path(null, pen, false, new(10.2, 0.6), new(8, 2.5), new(10.2, 4.4));
-                break;
-            }
-            case IconKind.Gear:
-                Circle(null, thin, 8, 8, 2.2);
-                Circle(null, thin, 8, 8, 4.8);
-                for (var spoke = 0; spoke < 8; spoke++)
-                {
-                    var angle = spoke * Math.PI / 4;
-                    Line(pen, 8 + 4.8 * Math.Cos(angle), 8 + 4.8 * Math.Sin(angle), 8 + 7 * Math.Cos(angle), 8 + 7 * Math.Sin(angle));
-                }
-                break;
-            case IconKind.Sidebar:
-                Box(thin, 1.5, 2.5, 14.5, 13.5, 2);
-                Line(thin, 10, 2.5, 10, 13.5);
-                break;
-            case IconKind.ZoomIn:
-                Magnifier();
-                Line(thin, 7, 5, 7, 9);
-                Line(thin, 5, 7, 9, 7);
-                break;
-            case IconKind.ZoomOut:
-                Magnifier();
-                Line(thin, 5, 7, 9, 7);
-                break;
-            case IconKind.Search:
-                Magnifier();
-                break;
-            case IconKind.ExternalLink:
-                Box(thin, 2, 2, 14, 14, 2.5);
-                Line(thin, 6, 10, 10.5, 5.5);
-                Path(null, thin, false, new(7, 5.5), new(10.5, 5.5), new(10.5, 9));
-                break;
-            case IconKind.Copy:
-                Box(thin, 6, 6, 14, 14, 1.5);
-                Path(null, thin, false, new(3.5, 10), new(2, 10), new(2, 2), new(10, 2), new(10, 3.5));
-                break;
             case IconKind.WarningFilled:
                 Path(brush, new Pen(brush, 1.5 * scale, lineJoin: PenLineJoin.Round), true, new(8, 1.8), new(14.8, 13.8), new(1.2, 13.8));
                 Line(cut, 8, 5.8, 8, 9.4);
@@ -182,98 +139,18 @@ public static class Icons
                 context.DrawRectangle(brush, null, new RoundedRect(new Rect(P(1.5, 2), P(14.5, 11)), 3 * scale));
                 Path(brush, null, true, new(4, 10), new(4, 14.5), new(8.5, 10));
                 break;
-            case IconKind.TextBubble:
-                Box(thin, 1.5, 2, 14.5, 11, 3);
-                Path(null, thin, false, new(4, 11), new(4, 14.5), new(7.5, 11));
-                Line(thin, 5, 5.5, 11, 5.5);
-                Line(thin, 5, 8, 9, 8);
-                break;
-            case IconKind.Branch:
-                Circle(null, thin, 5, 3.3, 1.6);
-                Circle(null, thin, 5, 12.7, 1.6);
-                Circle(null, thin, 11, 4.3, 1.6);
-                Line(thin, 5, 4.9, 5, 11.1);
-            {
-                var geometry = new StreamGeometry();
-                using (var g = geometry.Open())
-                {
-                    g.BeginFigure(P(11, 5.9), false);
-                    g.QuadraticBezierTo(P(11, 9.5), P(5, 10.2));
-                    g.EndFigure(false);
-                }
-                context.DrawGeometry(null, thin, geometry);
-                break;
-            }
-            case IconKind.Calendar:
-                Box(thin, 2, 3, 14, 14, 2);
-                Line(thin, 2, 6.5, 14, 6.5);
-                Line(thin, 5.5, 1.5, 5.5, 4.5);
-                Line(thin, 10.5, 1.5, 10.5, 4.5);
-                break;
-            case IconKind.Person:
-            {
-                Circle(null, thin, 8, 8, 6.5);
-                Circle(null, thin, 8, 6.3, 2.3);
-                var geometry = new StreamGeometry();
-                using (var g = geometry.Open())
-                {
-                    g.BeginFigure(P(3.8, 12.7), false);
-                    g.QuadraticBezierTo(P(8, 8.2), P(12.2, 12.7));
-                    g.EndFigure(false);
-                }
-                context.DrawGeometry(null, thin, geometry);
-                break;
-            }
             case IconKind.Merge:
                 DrawMerge(context, rect, brush, 1.6);
                 break;
             case IconKind.Circle:
                 Circle(null, pen, 8, 8, 5.5);
                 break;
-            case IconKind.Tray:
-                Box(thin, 2, 3, 14, 13, 2);
-                Line(thin, 5, 6.5, 11, 6.5);
-                Line(thin, 5, 9.5, 11, 9.5);
-                break;
-            case IconKind.ToTop:
-                Line(pen, 3, 2.5, 13, 2.5);
-                Line(pen, 8, 14, 8, 5.5);
-                Path(null, pen, false, new(4.5, 9), new(8, 5.5), new(11.5, 9));
-                break;
-            case IconKind.ToBottom:
-                Line(pen, 3, 13.5, 13, 13.5);
-                Line(pen, 8, 2, 8, 10.5);
-                Path(null, pen, false, new(4.5, 7), new(8, 10.5), new(11.5, 7));
-                break;
-            case IconKind.Server:
-                Box(thin, 2, 2.5, 14, 7, 1.5);
-                Box(thin, 2, 9, 14, 13.5, 1.5);
-                Circle(brush, null, 4.6, 4.75, 0.7);
-                Circle(brush, null, 4.6, 11.25, 0.7);
-                break;
-            case IconKind.Note:
-                Box(thin, 2.5, 1.5, 13.5, 14.5, 2);
-                Line(thin, 5, 5, 11, 5);
-                Line(thin, 5, 8, 11, 8);
-                Line(thin, 5, 11, 9, 11);
-                break;
-            case IconKind.Checklist:
-                Path(null, thin, false, new(1.5, 4), new(3, 5.5), new(5.5, 2.5));
-                Line(thin, 8, 4, 14.5, 4);
-                Box(thin, 1.8, 9.6, 5.2, 13, 0.8);
-                Line(thin, 8, 11.3, 14.5, 11.3);
-                break;
             case IconKind.Checkbox:
-                Box(thin, 2, 2, 14, 14, 3.5);
+                context.DrawRectangle(null, thin, new RoundedRect(new Rect(P(2, 2), P(14, 14)), 3.5 * scale));
                 break;
             case IconKind.CheckboxChecked:
                 context.DrawRectangle(brush, null, new RoundedRect(new Rect(P(1.5, 1.5), P(14.5, 14.5)), 3.5 * scale));
                 Path(null, cut, false, new(4.6, 8.3), new(7, 10.6), new(11.4, 5.6));
-                break;
-            case IconKind.Trash:
-                Line(thin, 2.5, 4.5, 13.5, 4.5);
-                Path(null, thin, false, new(6, 4.5), new(6, 2.5), new(10, 2.5), new(10, 4.5));
-                Path(null, thin, false, new(4, 4.5), new(4.8, 14), new(11.2, 14), new(12, 4.5));
                 break;
         }
     }

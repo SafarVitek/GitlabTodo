@@ -47,7 +47,7 @@ public sealed partial class NotesSection : StackPanel
         var header = new DockPanel();
         var end = Views.Row(6, badge, add);
         DockPanel.SetDock(end, Dock.Right);
-        header.Children.AddRange([end, Views.SectionTitle("Poznámky", IconKind.Note)]);
+        header.Children.AddRange([end, Views.SectionTitle("Poznámky")]);
 
         view = Views.Box(lines);
         view.Cursor = new Cursor(StandardCursorType.Ibeam);
