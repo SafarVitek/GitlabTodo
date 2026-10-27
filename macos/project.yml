@@ -1,0 +1,68 @@
+name: GitLabTodo
+options:
+  bundleIdPrefix: local.gitlabtodo
+  deploymentTarget:
+    macOS: "15.0"
+  developmentLanguage: cs
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Local-only app: ad-hoc signature, no Apple developer account needed.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  GitLabTodo:
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    dependencies:
+      - target: GitLabTodoWidget
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: GitLab Todo
+        CFBundleLocalizations: [cs]
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSUIElement: true
+        CFBundleURLTypes:
+          - CFBundleURLName: local.gitlabtodo
+            CFBundleURLSchemes: [gitlabtodo]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.gitlabtodo
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  GitLabTodoWidget:
+    type: app-extension
+    platform: macOS
+    sources: [Widget, Shared]
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: GitLab Todo
+        CFBundleLocalizations: [cs]
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/GitLabTodoWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        # The sandboxed widget reads the snapshot and remembers its open tab there.
+        com.apple.security.temporary-exception.files.home-relative-path.read-write:
+          - /Library/Application Support/GitLabTodo/
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.gitlabtodo.widget
+schemes:
+  GitLabTodo:
+    build:
+      targets:
+        GitLabTodo: all
+    run:
+      config: Debug
+    archive:
+      config: Release
