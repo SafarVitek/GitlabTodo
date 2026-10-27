@@ -345,6 +345,50 @@ struct GitLabClient: Sendable {
         return formatter.date(from: string)
     }
 
+    // MARK: Repository for syncing
+
+    /// `path` is `group/project` or a numeric ID.
+    func project(path: String) async throws -> GLProject {
+        try await get("projects/\(Self.encoded(path))")
+    }
+
+    /// A new private repository in the user's namespace, with a README so that it has a default branch.
+    func createPrivateProject(name: String) async throws -> GLProject {
+        struct Body: Encodable {
+            let name: String
+            let visibility = "private"
+            let initializeWithReadme = true
+        }
+        return try await send("POST", "projects", body: Body(name: name))
+    }
+
+    /// The file on `ref`, nil when it is not there yet.
+    func repositoryFile(projectID: Int, path: String, ref: String) async throws -> GLRepositoryFile? {
+        do {
+            return try await get("projects/\(projectID)/repository/files/\(Self.encoded(path))", query: [URLQueryItem(name: "ref", value: ref)])
+        } catch GitLabError.notFound {
+            return nil
+        }
+    }
+
+    /// Creates the file, or updates it when `lastCommitID` is given; GitLab refuses the update when the file changed
+    /// after that commit.
+    func writeRepositoryFile(projectID: Int, path: String, branch: String, content: String, message: String, lastCommitID: String?) async throws {
+        struct Body: Encodable {
+            let branch: String
+            let content: String
+            let commitMessage: String
+            let encoding = "text"
+            let lastCommitId: String?
+        }
+        let body = Body(branch: branch, content: content, commitMessage: message, lastCommitId: lastCommitID)
+        let _: GLFileWrite = try await send(lastCommitID == nil ? "POST" : "PUT", "projects/\(projectID)/repository/files/\(Self.encoded(path))", body: body)
+    }
+
+    private static func encoded(_ component: String) -> String {
+        component.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? component
+    }
+
     // MARK: HTTP
 
     private func get<Response: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> Response {
@@ -444,6 +488,23 @@ struct GitLabClient: Sendable {
 }
 
 // MARK: - API models
+
+struct GLProject: Decodable, Sendable {
+    let id: Int
+    let pathWithNamespace: String
+    let defaultBranch: String?
+    let visibility: String?
+}
+
+struct GLRepositoryFile: Decodable, Sendable {
+    /// Base64.
+    let content: String
+    let lastCommitId: String
+}
+
+struct GLFileWrite: Decodable, Sendable {
+    let filePath: String
+}
 
 struct GLUser: Decodable, Sendable {
     let id: Int

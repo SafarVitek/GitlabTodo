@@ -8,7 +8,7 @@ var failures = 0
     if !condition { failures += 1 }
 }
 
-MainActor.assumeIsolated {
+do {
     let model = AppModel(preview: .preview)
     func refs(_ items: [TodoItem]) -> [String] { items.map(\.shortReference) }
     let item = { (ref: String) in model.items.first { $0.shortReference == ref }! }
@@ -204,7 +204,152 @@ MainActor.assumeIsolated {
     check(labels.map(\.itemLabel) == [ItemLabel(name: "plain", color: "#6699cc", textColor: "#FFFFFF"), ItemLabel(name: "bug", color: "#dc143c", textColor: "#FFFFFF")], "labels with and without details")
     check(Color(hex: "#dc143c") != nil && Color(hex: "red") == nil, "label colors parsed")
     check(GitLabClient.issueIID(fromBranch: "1372-remove-timeline") == 1372 && GitLabClient.issueIID(fromBranch: "feature-1372") == nil, "branch prefix parsing")
+
+// Sync: the plan goes through a repository file, with account IDs that are the same on every device.
+let stable = PlanSync.stableID(forBaseURL: "https://gitlab.example.com")
+check(stable == PlanSync.stableID(forBaseURL: " GitLab.example.com/api/v4/ ") && UUID(uuidString: stable) != nil && stable.count == 36, "stable account ID: \(stable)")
+check(stable == "786E6437-5B18-5A8B-AC80-BBA0B9196456", "same stable ID as the Linux app")
+check(PlanSync.mergeOrder(base: ["a", "b", "c"], local: ["c", "a", "b"], remote: ["a", "x", "b", "c"]) == ["c", "a", "x", "b"], "local order kept, a remote addition after its neighbour")
+check(PlanSync.mergeOrder(base: ["a", "b"], local: ["a", "b"], remote: ["b", "a"]) == ["b", "a"], "only the other device reordered: its order")
+check(PlanSync.mergeOrder(base: ["a", "b", "c"], local: ["b", "a", "c"], remote: ["a", "c"]) == ["a", "c"], "a remote removal applies to the local order")
+let older = ItemNote(text: "starší", updatedAt: Date(timeIntervalSince1970: 1000))
+let newer = ItemNote(text: "novější", updatedAt: Date(timeIntervalSince1970: 2000))
+let notesMerged = PlanSync.merge(
+    base: Plan(notes: ["n": ItemNote(text: "původní", updatedAt: .distantPast), "gone": older]),
+    local: Plan(notes: ["n": newer, "gone": older]),
+    remote: Plan(notes: ["n": older]))
+check(notesMerged.notes["n"] == newer && notesMerged.notes["gone"] == nil, "notes: the newer edit wins, a deletion on the other side applies")
+let keptNote = PlanSync.merge(base: Plan(notes: ["n": older]), local: Plan(notes: ["n": newer]), remote: Plan())
+check(keptNote.notes["n"] == newer, "a note edited here is not lost to a deletion elsewhere")
 }
+
+// Two devices syncing through one repository file.
+actor MemoryPlanStore: RemotePlanStore {
+    var content: Data?
+    var commits = 0
+    /// Lets another device write between a read and the next write once.
+    var interference: (@Sendable () async -> Void)?
+
+    func read() async throws -> (content: Data, commitID: String)? {
+        content.map { ($0, "c\(commits)") }
+    }
+
+    func write(_ data: Data, over commitID: String?) async throws -> String {
+        if let interference {
+            self.interference = nil
+            await interference()
+        }
+        guard commitID == (content == nil ? nil : "c\(commits)") else { throw PlanSync.Conflict() }
+        content = data
+        commits += 1
+        return "c\(commits)"
+    }
+
+    func setInterference(_ action: @escaping @Sendable () async -> Void) {
+        interference = action
+    }
+
+    func overwrite(_ data: Data) {
+        content = data
+        commits += 1
+    }
+}
+
+do {
+    let deviceA = GitLabAccount(name: "GitLab", baseURL: "https://gitlab.example.com")
+    let deviceB = GitLabAccount(name: "GitLab", baseURL: "gitlab.example.com/")
+    func id(_ account: GitLabAccount, _ number: Int) -> String { TodoItem.makeID(accountID: account.id, kind: .issue, gitLabID: number) }
+    let store = MemoryPlanStore()
+    var planA = Plan(order: [id(deviceA, 1), id(deviceA, 2)], notes: [id(deviceA, 1): ItemNote(text: "Meeting\n- [ ] zavolat", updatedAt: .now)])
+    var stateA = SyncState(settings: SyncSettings(accountID: deviceA.id, project: "me/data"))
+    (planA, stateA) = try await PlanSync.sync(local: planA, state: stateA, store: store, accounts: [deviceA])
+    let written = String(decoding: await store.content ?? Data(), as: UTF8.self)
+    check(written.contains(PlanSync.stableID(forBaseURL: deviceA.baseURL)) && !written.contains(deviceA.id.uuidString) && written.contains("\"format\" : 1"), "the repository file uses stable IDs")
+
+    var planB = Plan()
+    var stateB = SyncState(settings: SyncSettings(accountID: deviceB.id, project: "me/data"))
+    (planB, stateB) = try await PlanSync.sync(local: planB, state: stateB, store: store, accounts: [deviceB])
+    check(planB.order == [id(deviceB, 1), id(deviceB, 2)] && planB.notes[id(deviceB, 1)]?.openTasks.count == 1, "a second device gets the plan in its own IDs")
+
+    planB.notes[id(deviceB, 1)] = planB.notes[id(deviceB, 1)]!.toggling(line: 1)
+    planB.order.reverse()
+    (planB, stateB) = try await PlanSync.sync(local: planB, state: stateB, store: store, accounts: [deviceB])
+    planA.delays[id(deviceA, 2)] = 2
+    (planA, stateA) = try await PlanSync.sync(local: planA, state: stateA, store: store, accounts: [deviceA])
+    check(planA.order == [id(deviceA, 2), id(deviceA, 1)] && planA.notes[id(deviceA, 1)]?.openTasks.isEmpty == true && planA.delays[id(deviceA, 2)] == 2,
+          "changes from both devices merge")
+    (planB, stateB) = try await PlanSync.sync(local: planB, state: stateB, store: store, accounts: [deviceB])
+    check(planB.delays[id(deviceB, 2)] == 2, "and reach the other one")
+
+    let commits = await store.commits
+    (planA, stateA) = try await PlanSync.sync(local: planA, state: stateA, store: store, accounts: [deviceA])
+    check(await store.commits == commits, "nothing changed: nothing written")
+
+    // B writes between A's read and A's write: A reads again and merges instead of overwriting.
+    planA.delays[id(deviceA, 1)] = 1
+    var otherPlan = planB
+    otherPlan.tracked = [ExternalBlocker(accountID: deviceB.id, projectID: 9, kind: .issue, iid: 4, title: "Kolegovo", reference: "g/p#4", webURL: URL(string: "https://x")!)]
+    let sneakyPlan = otherPlan
+    await store.setInterference {
+        let document = SyncDocument(plan: try! PlanSync.translate(sneakyPlan, PlanSync.stableIDs(of: [deviceB])))
+        await store.overwrite(try! PlanSync.encoder().encode(document))
+    }
+    (planA, stateA) = try await PlanSync.sync(local: planA, state: stateA, store: store, accounts: [deviceA])
+    check(planA.delays[id(deviceA, 1)] == 1 && planA.tracked.first?.accountID == deviceA.id, "a write in between is merged, not overwritten")
+
+    // A file written by the Linux app, exactly as it writes it.
+    let fromLinux = #"""
+    {
+      "format": 1,
+      "plan": {
+        "order": [
+          "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7"
+        ],
+        "waits": {
+          "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7": {
+            "itemIDs": [],
+            "external": [
+              {
+                "accountID": "786E6437-5B18-5A8B-AC80-BBA0B9196456",
+                "projectID": 9,
+                "kind": "mergeRequest",
+                "iid": 4,
+                "title": "Kolegovo",
+                "reference": "g/p!4",
+                "webURL": "https://x/g/p/-/merge_requests/4"
+              }
+            ]
+          }
+        },
+        "released": {
+          "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:8": {
+            "date": "2026-10-27T10:00:00Z",
+            "finished": [
+              "p#1"
+            ]
+          }
+        },
+        "tracked": [],
+        "delays": {
+          "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7": 2
+        },
+        "notes": {
+          "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7": {
+            "text": "- [x] hotovo",
+            "updatedAt": "2026-10-27T12:00:00Z"
+          }
+        }
+      }
+    }
+    """#
+    let linuxDocument = try PlanSync.decoder().decode(SyncDocument.self, from: Data(fromLinux.utf8))
+    let linuxPlan = try PlanSync.translate(linuxDocument.plan, [PlanSync.stableID(forBaseURL: deviceA.baseURL): deviceA.id.uuidString])
+    check(linuxPlan.order == [id(deviceA, 7)] && linuxPlan.waits[id(deviceA, 7)]?.external.first?.kind == .mergeRequest && linuxPlan.released[id(deviceA, 8)]?.finished == ["p#1"]
+          && linuxPlan.notes[id(deviceA, 7)]?.tasks.first?.isDone == true && linuxPlan.delays[id(deviceA, 7)] == 2, "a file written by the Linux app reads on macOS")
+} catch {
+    check(false, "sync failed: \(error)")
+}
+
 print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
 

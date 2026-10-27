@@ -24,6 +24,8 @@ liště s tím, co je na řadě. Instalace přes Nix je popsaná v [README v ko�
 - `~/.local/share/gitlab-todo/plan.json`: pořadí, vazby, odklady, poznámky a cizí položky v timeline. Formát je
   stejný jako u macOS verze.
 - `~/.local/share/gitlab-todo/snapshot.json`: poslední stažený stav, aby seznam nebyl po startu prázdný.
+- `~/.local/share/gitlab-todo/sync.json`: nastavení synchronizace a stav posledního sloučení, když je zapnutá
+  (viz [README v kořeni](../README.md#synchronizace-mezi-počítači)).
 
 Spouštění po přihlášení zapíná nastavení, zapíše `~/.config/autostart/gitlab-todo.desktop` a aplikace
 pak startuje rovnou do lišty.

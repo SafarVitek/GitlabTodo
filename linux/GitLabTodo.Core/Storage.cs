@@ -85,6 +85,7 @@ public static class Storage
     public static string TokensPath => Path.Combine(ConfigDirectory, "tokens.json");
     public static string PlanPath => Path.Combine(DataDirectory, "plan.json");
     public static string SnapshotPath => Path.Combine(DataDirectory, "snapshot.json");
+    public static string SyncPath => Path.Combine(DataDirectory, "sync.json");
 
     private static string Folder(string variable, string fallback)
     {

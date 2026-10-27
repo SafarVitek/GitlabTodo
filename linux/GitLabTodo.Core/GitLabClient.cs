@@ -81,6 +81,13 @@ public sealed record GLMergeRequest(
     public bool IsDraft => Draft ?? WorkInProgress ?? false;
 }
 
+public sealed record GLProject(long Id, string PathWithNamespace, string? DefaultBranch, string? Visibility);
+
+/// `Content` is Base64.
+public sealed record GLRepositoryFile(string Content, string LastCommitId);
+
+public sealed record GLFileWrite(string FilePath);
+
 public sealed record GLTodo(string ActionName, GLMergeRequest? Target, DateTimeOffset CreatedAt);
 
 /// The fields issues and merge requests share.
@@ -250,6 +257,38 @@ public sealed partial class GitLabClient(Uri apiBase, string token)
         var issueHits = Get<List<GLWorkItem>>($"{scope}issues", words);
         var mergeRequestHits = Get<List<GLWorkItem>>($"{scope}merge_requests", words);
         return [.. (await issueHits).Select(i => (ItemKind.Issue, i)), .. (await mergeRequestHits).Take(5).Select(m => (ItemKind.MergeRequest, m))];
+    }
+
+    // MARK: Repository for syncing
+
+    /// `path` is `group/project` or a numeric ID.
+    public Task<GLProject> Project(string path) => Get<GLProject>($"projects/{Uri.EscapeDataString(path)}");
+
+    /// A new private repository in the user's namespace, with a README so that it has a default branch.
+    public Task<GLProject> CreatePrivateProject(string name) =>
+        Send<GLProject>(HttpMethod.Post, "projects", new { name, visibility = "private", initialize_with_readme = true });
+
+    /// The file on the branch or commit `reference`, null when it is not there yet.
+    public async Task<GLRepositoryFile?> RepositoryFile(long projectId, string path, string reference)
+    {
+        try
+        {
+            return await Get<GLRepositoryFile>($"projects/{projectId}/repository/files/{Uri.EscapeDataString(path)}", [("ref", reference)]);
+        }
+        catch (GitLabException exception) when (exception.Message == GitLabException.NotFound.Message)
+        {
+            return null;
+        }
+    }
+
+    /// Creates the file, or updates it when `lastCommitId` is given; GitLab refuses the update when the file changed
+    /// after that commit.
+    public Task WriteRepositoryFile(long projectId, string path, string branch, string content, string message, string? lastCommitId)
+    {
+        var url = $"projects/{projectId}/repository/files/{Uri.EscapeDataString(path)}";
+        return lastCommitId is null
+            ? Send<GLFileWrite>(HttpMethod.Post, url, new { branch, content, commit_message = message, encoding = "text" })
+            : Send<GLFileWrite>(HttpMethod.Put, url, new { branch, content, commit_message = message, encoding = "text", last_commit_id = lastCommitId });
     }
 
     // MARK: Actions

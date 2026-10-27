@@ -3,7 +3,7 @@ import Observation
 import WidgetKit
 
 /// The user's own ordering of the work, kept locally.
-struct Plan: Codable, Sendable {
+struct Plan: Codable, Equatable, Sendable {
     /// Item IDs in the order the user wants to work on them.
     var order: [String] = []
     var waits: [String: Wait] = [:]
@@ -71,6 +71,9 @@ final class AppModel {
     private(set) var timelineDelays: [String: Int] = [:]
     /// An item whose notes open for writing once it is shown, e.g. after a click in the widget.
     private(set) var noteToEdit: String?
+    /// Syncing the plan through a GitLab repository, nil while it is off.
+    private(set) var syncState: SyncState?
+    private(set) var syncStatus = SyncStatus.idle
 
     @ObservationIgnored private let isPreview: Bool
     @ObservationIgnored private var plan: Plan
@@ -80,6 +83,9 @@ final class AppModel {
     @ObservationIgnored private var refreshPending = false
     @ObservationIgnored private var publishedHash: Int?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private var isSyncing = false
+    @ObservationIgnored private var syncPending = false
 
     private init() {
         isPreview = false
@@ -88,6 +94,7 @@ final class AppModel {
         let interval = defaults.double(forKey: Keys.refreshInterval)
         refreshInterval = interval > 0 ? interval : 300
         plan = SharedStore.load(Plan.self, from: SharedStore.planURL) ?? Plan()
+        syncState = SharedStore.load(SyncState.self, from: SharedStore.syncURL)
         for account in accounts {
             tokens[account.id] = Keychain.token(for: account.id)
         }
@@ -166,6 +173,7 @@ final class AppModel {
             refreshPending = false
             await fetchAll()
         } while refreshPending
+        await syncPlan()
         isRefreshing = false
     }
 
@@ -648,6 +656,7 @@ final class AppModel {
     private func planChanged() {
         savePlan()
         rebuildItems()
+        scheduleSync()
     }
 
     private func savePlan() {
@@ -901,6 +910,9 @@ final class AppModel {
         // Notes outlive their items, not their GitLab.
         plan.notes = plan.notes.filter { !$0.key.hasPrefix(account.id.uuidString + ":") }
         savePlan()
+        if syncState?.settings.accountID == account.id {
+            configureSync(nil)
+        }
         persistAccounts()
         rebuildItems()
     }
@@ -913,5 +925,95 @@ final class AppModel {
 
     private func persistAccounts() {
         UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: Keys.accounts)
+    }
+}
+
+enum SyncStatus: Equatable {
+    case idle
+    case syncing
+    case synced(Date)
+    case failed(String)
+}
+
+// MARK: - Sync
+
+extension AppModel {
+    /// Turns syncing on with a repository, or off with nil. A new repository starts from scratch: the first sync
+    /// merges what is there with this device's plan.
+    func configureSync(_ settings: SyncSettings?) {
+        syncTask?.cancel()
+        syncState = settings.map { SyncState(settings: $0) }
+        syncStatus = .idle
+        saveSyncState()
+        if settings != nil {
+            Task { await syncPlan() }
+        }
+    }
+
+    /// A private repository named `gitlab-todo-data` in the user's namespace; returns its `group/project` path.
+    func createSyncRepository(accountID: UUID) async throws -> String {
+        guard let account = accounts.first(where: { $0.id == accountID }) else { throw GitLabError.missingToken }
+        return try await client(for: account).createPrivateProject(name: "gitlab-todo-data").pathWithNamespace
+    }
+
+    /// Exchanges the plan with the repository. Runs after every refresh and shortly after a change on this device.
+    func syncPlan() async {
+        guard !isPreview, syncState != nil else { return }
+        guard !isSyncing else {
+            syncPending = true
+            return
+        }
+        isSyncing = true
+        defer { isSyncing = false }
+        repeat {
+            syncPending = false
+            guard let state = syncState, let account = accounts.first(where: { $0.id == state.settings.accountID }) else { return }
+            syncStatus = .syncing
+            do {
+                let client = try client(for: account)
+                let project = try await client.project(path: state.settings.project)
+                let store = GitLabPlanStore(client: client, projectID: project.id, branch: project.defaultBranch ?? "main")
+                let started = plan
+                var (synced, next) = try await PlanSync.sync(local: started, state: state, store: store, accounts: accounts)
+                // The settings changed while syncing, this result belongs to the old repository.
+                guard syncState?.settings == state.settings else { continue }
+                // What changed on this device in the meantime stays, the next sync sends it.
+                if plan != started {
+                    synced = PlanSync.merge(base: started, local: plan, remote: synced)
+                }
+                next.syncedAt = .now
+                next.visibility = project.visibility
+                syncState = next
+                saveSyncState()
+                if synced != plan {
+                    plan = synced
+                    savePlan()
+                    rebuildItems()
+                }
+                syncStatus = .synced(.now)
+            } catch {
+                syncStatus = .failed(error.localizedDescription)
+            }
+        } while syncPending
+    }
+
+    /// Changes go out a little later, after a burst of editing, rather than with every keystroke.
+    func scheduleSync() {
+        guard !isPreview, syncState != nil else { return }
+        syncTask?.cancel()
+        syncTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled else { return }
+            await self?.syncPlan()
+        }
+    }
+
+    private func saveSyncState() {
+        guard !isPreview else { return }
+        if let syncState {
+            try? SharedStore.save(syncState, to: SharedStore.syncURL)
+        } else {
+            try? FileManager.default.removeItem(at: SharedStore.syncURL)
+        }
     }
 }

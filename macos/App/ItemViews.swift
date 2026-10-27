@@ -188,10 +188,14 @@ struct ErrorBanner: View {
 
     var body: some View {
         let failing = model.accounts.filter { model.accountErrors[$0.id] != nil }
-        if !failing.isEmpty {
+        let syncError: String? = if case .failed(let message) = model.syncStatus { message } else { nil }
+        if !failing.isEmpty || syncError != nil {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(failing) { account in
                     Label("\(account.name): \(model.accountErrors[account.id] ?? "")", systemImage: "exclamationmark.triangle.fill")
+                }
+                if let syncError {
+                    Label("Synchronizace: \(syncError)", systemImage: "arrow.triangle.2.circlepath")
                 }
             }
             .font(.caption)

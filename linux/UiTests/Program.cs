@@ -156,12 +156,34 @@ Check(Rows().Count == 11, "dark theme rebuilt the list");
 var settings = new SettingsWindow(state, shell);
 settings.Show();
 Pump();
-settings.GetVisualDescendants().OfType<ComboBox>().First().SelectedIndex = 0;
+ComboBox Picker(string option) => settings.GetVisualDescendants().OfType<ComboBox>()
+    .First(c => c.Items.OfType<ComboBoxItem>().Any(i => i.Content as string == option));
+Picker("5 min").SelectedIndex = 0;
 Pump();
 Check(state.RefreshMinutes == AppState.RefreshIntervals[0], $"refresh interval picked: {state.RefreshMinutes} min");
-settings.GetVisualDescendants().OfType<ComboBox>().ElementAt(1).SelectedIndex = 1;
+Picker("Podle systému").SelectedIndex = 1;
 Pump();
 Check(state.Theme == "light" && Application.Current.ActualThemeVariant == ThemeVariant.Light && Rows().Count == 11, "light theme picked, the window rebuilt for it");
+
+// Sync: a GitLab and a repository, applied; „Vypnuto“ turns it off again.
+var syncSection = settings.GetVisualDescendants().OfType<SyncSection>().First();
+var gitLabPicker = syncSection.GetVisualDescendants().OfType<ComboBox>().First();
+gitLabPicker.SelectedIndex = 1;
+Pump();
+var repositoryField = syncSection.GetVisualDescendants().OfType<TextBox>().First(t => t.Watermark as string == "skupina/gitlab-todo-data");
+Check(repositoryField.IsEffectivelyVisible, "picking a GitLab asks for the repository");
+repositoryField.Text = "https://gitlab.example.com/me/gitlab-todo-data.git";
+Pump();
+var useButton = syncSection.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Použít");
+// A click in the settings window, not the main one.
+var usePoint = useButton.TranslatePoint(new Point(useButton.Bounds.Width / 2, useButton.Bounds.Height / 2), settings)!.Value;
+settings.MouseDown(usePoint, MouseButton.Left);
+settings.MouseUp(usePoint, MouseButton.Left);
+Pump();
+Check(state.SyncState?.Settings.Project == "me/gitlab-todo-data", $"sync set to the repository from a pasted URL: {state.SyncState?.Settings.Project}");
+gitLabPicker.SelectedIndex = 0;
+Pump();
+Check(state.SyncState is null, "„Vypnuto“ turns syncing off");
 
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");
 return failures == 0 ? 0 : 1;

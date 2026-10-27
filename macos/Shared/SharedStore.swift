@@ -13,6 +13,7 @@ enum SharedStore {
     static let snapshotURL = directoryURL.appending(path: "snapshot.json")
     static let planURL = directoryURL.appending(path: "plan.json")
     static let widgetStateURL = directoryURL.appending(path: "widget-state.json")
+    static let syncURL = directoryURL.appending(path: "sync.json")
 
     static func load<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {
         guard let data = try? Data(contentsOf: url) else { return nil }

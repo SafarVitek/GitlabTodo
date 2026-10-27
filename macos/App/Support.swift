@@ -51,7 +51,7 @@ enum Windows {
     }
 
     static func showSettings() {
-        let window = settings ?? makeWindow(SettingsView(), title: "Nastavení", size: NSSize(width: 500, height: 420), autosaveName: "SettingsWindow", isResizable: false)
+        let window = settings ?? makeWindow(SettingsView(), title: "Nastavení", size: NSSize(width: 520, height: 640), autosaveName: "SettingsWindow", isResizable: false)
         settings = window
         present(window)
     }

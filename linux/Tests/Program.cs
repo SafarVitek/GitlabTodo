@@ -243,6 +243,86 @@ Check(GitLabClient.TitleWithoutDraftPrefix("Draft: Resolve \"x\"") == "Resolve \
 Check(GitLabAccount.NormalizedBaseUrl("gitlab.example.com/api/v4/") == "https://gitlab.example.com" && GitLabAccount.Username(" @jnovak ") == "jnovak", "settings input cleaned up");
 Check(Palette.PreferredSlot("x") == Palette.PreferredSlot("x") && Palette.PreferredSlot("6F1C2B9E-3D4A-4E5B-9C8D-7A6B5C4D3E2F:1") is >= 0 and < 6, "project color slot is stable");
 
+// Sync: the plan goes through a repository file, with account IDs that are the same on every device.
+var stable = PlanSync.StableId("https://gitlab.example.com");
+Check(stable == PlanSync.StableId(" GitLab.example.com/api/v4/ ") && Guid.TryParse(stable, out _) && stable.Length == 36, $"stable account ID: {stable}");
+Check(stable == "786E6437-5B18-5A8B-AC80-BBA0B9196456", "same stable ID as the macOS app");
+Check(Same(PlanSync.MergeOrder(["a", "b", "c"], ["c", "a", "b"], ["a", "x", "b", "c"]), "c", "a", "x", "b"), "local order kept, a remote addition after its neighbour");
+Check(Same(PlanSync.MergeOrder(["a", "b"], ["a", "b"], ["b", "a"]), "b", "a"), "only the other device reordered: its order");
+Check(Same(PlanSync.MergeOrder(["a", "b", "c"], ["b", "a", "c"], ["a", "c"]), "a", "c"), "a remote removal applies to the local order");
+var older = new ItemNote("starší", DateTimeOffset.FromUnixTimeSeconds(1000));
+var newer = new ItemNote("novější", DateTimeOffset.FromUnixTimeSeconds(2000));
+var notesMerged = PlanSync.Merge(
+    new Plan { Notes = new() { ["n"] = new ItemNote("původní", DateTimeOffset.MinValue), ["gone"] = older } },
+    new Plan { Notes = new() { ["n"] = newer, ["gone"] = older } },
+    new Plan { Notes = new() { ["n"] = older } });
+Check(notesMerged.Notes["n"] == newer && !notesMerged.Notes.ContainsKey("gone"), "notes: the newer edit wins, a deletion on the other side applies");
+var keptNote = PlanSync.Merge(new Plan { Notes = new() { ["n"] = older } }, new Plan { Notes = new() { ["n"] = newer } }, new Plan());
+Check(keptNote.Notes["n"] == newer, "a note edited here is not lost to a deletion elsewhere");
+var delays = PlanSync.Merge(new Plan { Delays = new() { ["a"] = 1 } }, new Plan { Delays = new() { ["a"] = 1, ["b"] = 2 } }, new Plan());
+Check(delays.Delays.Count == 1 && delays.Delays["b"] == 2, "delays merge per item, a removal elsewhere applies");
+
+// Two devices syncing through one repository file.
+var deviceA = new GitLabAccount { Name = "GitLab", BaseUrl = "https://gitlab.example.com" };
+var deviceB = new GitLabAccount { Name = "GitLab", BaseUrl = "gitlab.example.com/" };
+string SyncId(GitLabAccount account, long number) => TodoItem.MakeId(account.Id, ItemKind.Issue, number);
+var store = new MemoryPlanStore();
+var planA = new Plan { Order = [SyncId(deviceA, 1), SyncId(deviceA, 2)], Notes = new() { [SyncId(deviceA, 1)] = new ItemNote("Meeting\n- [ ] zavolat", DateTimeOffset.Now) } };
+var stateA = new SyncState { Settings = new SyncSettings(deviceA.Id, "me/data") };
+(planA, stateA) = await PlanSync.Sync(planA, stateA, store, [deviceA]);
+var written = System.Text.Encoding.UTF8.GetString(store.Content ?? []);
+Check(written.Contains(stable) && !written.Contains(deviceA.Id.IdString()) && written.Contains("\"format\": 1"), "the repository file uses stable IDs");
+
+var planB = new Plan();
+var stateB = new SyncState { Settings = new SyncSettings(deviceB.Id, "me/data") };
+(planB, stateB) = await PlanSync.Sync(planB, stateB, store, [deviceB]);
+Check(Same(planB.Order, SyncId(deviceB, 1), SyncId(deviceB, 2)) && planB.Notes[SyncId(deviceB, 1)].OpenTasks.Count == 1, "a second device gets the plan in its own IDs");
+
+planB = PlanSync.Copy(planB);
+planB.Notes[SyncId(deviceB, 1)] = planB.Notes[SyncId(deviceB, 1)].Toggling(1);
+planB.Order.Reverse();
+(planB, stateB) = await PlanSync.Sync(planB, stateB, store, [deviceB]);
+planA = PlanSync.Copy(planA);
+planA.Delays[SyncId(deviceA, 2)] = 2;
+(planA, stateA) = await PlanSync.Sync(planA, stateA, store, [deviceA]);
+Check(Same(planA.Order, SyncId(deviceA, 2), SyncId(deviceA, 1)) && planA.Notes[SyncId(deviceA, 1)].OpenTasks.Count == 0 && planA.Delays[SyncId(deviceA, 2)] == 2,
+    "changes from both devices merge");
+(planB, stateB) = await PlanSync.Sync(planB, stateB, store, [deviceB]);
+Check(planB.Delays.GetValueOrDefault(SyncId(deviceB, 2)) == 2, "and reach the other one");
+
+var commits = store.Commits;
+(planA, stateA) = await PlanSync.Sync(planA, stateA, store, [deviceA]);
+Check(store.Commits == commits, "nothing changed: nothing written");
+
+// B writes between A's read and A's write: A reads again and merges instead of overwriting.
+planA = PlanSync.Copy(planA);
+planA.Delays[SyncId(deviceA, 1)] = 1;
+var otherPlan = PlanSync.Copy(planB);
+otherPlan.Tracked = [new ExternalBlocker(deviceB.Id, 9, ItemKind.Issue, 4, "Kolegovo", "g/p#4", "https://x")];
+store.Interference = () => store.Overwrite(JsonSerializer.SerializeToUtf8Bytes(
+    new SyncDocument { Plan = PlanSync.Translate(otherPlan, PlanSync.StableIds([deviceB])) }, Storage.Json));
+(planA, stateA) = await PlanSync.Sync(planA, stateA, store, [deviceA]);
+Check(planA.Delays.GetValueOrDefault(SyncId(deviceA, 1)) == 1 && planA.Tracked.FirstOrDefault()?.AccountId == deviceA.Id, "a write in between is merged, not overwritten");
+
+// Files from the macOS app, with its sorted keys and spacing, read the same.
+var fromMac = """
+    {
+      "format" : 1,
+      "plan" : {
+        "delays" : { "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7" : 2 },
+        "notes" : { "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7" : { "text" : "- [x] hotovo", "updatedAt" : "2026-10-27T12:00:00Z" } },
+        "order" : [ "786E6437-5B18-5A8B-AC80-BBA0B9196456:issue:7" ],
+        "released" : { },
+        "tracked" : [ ],
+        "waits" : { }
+      }
+    }
+    """;
+var macDocument = JsonSerializer.Deserialize<SyncDocument>(fromMac, Storage.Json)!;
+var macPlan = PlanSync.Translate(macDocument.Plan, new Dictionary<string, string> { [stable] = deviceA.Id.IdString() });
+Check(macPlan.Order.Single() == SyncId(deviceA, 7) && macPlan.Notes[SyncId(deviceA, 7)].Tasks.Single().IsDone && macPlan.Delays[SyncId(deviceA, 7)] == 2,
+    "a file written by the macOS app reads on Linux");
+
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");
 return failures == 0 ? 0 : 1;
 
@@ -257,5 +337,38 @@ sealed class SilentUserInterface : IUserInterface
 
     public void Open(string url)
     {
+    }
+}
+
+/// One repository file shared by the test's devices.
+sealed class MemoryPlanStore : IRemotePlanStore
+{
+    public byte[]? Content { get; private set; }
+    public int Commits { get; private set; }
+    /// Lets another device write between a read and the next write once.
+    public Action? Interference { get; set; }
+
+    public Task<(byte[] Content, string CommitId)?> Read() =>
+        Task.FromResult<(byte[], string)?>(Content is null ? null : (Content, $"c{Commits}"));
+
+    public Task<string> Write(byte[] content, string? commitId)
+    {
+        if (Interference is { } interference)
+        {
+            Interference = null;
+            interference();
+        }
+        if (commitId != (Content is null ? null : $"c{Commits}"))
+        {
+            throw new PlanSyncConflict();
+        }
+        Overwrite(content);
+        return Task.FromResult($"c{Commits}");
+    }
+
+    public void Overwrite(byte[] content)
+    {
+        Content = content;
+        Commits++;
     }
 }

@@ -16,6 +16,7 @@ public sealed class SettingsWindow : Window
     private ComboBox interval = null!;
     private CheckBox keepInTray = null!;
     private ComboBox theme = null!;
+    private SyncSection sync = null!;
 
     public SettingsWindow(AppState state, Shell shell)
     {
@@ -93,7 +94,8 @@ public sealed class SettingsWindow : Window
         refresh.Children.AddRange([Field("Interval", interval), keepInTray, autostart, autostartError]);
         var look = Field("Motiv", theme);
         var content = new StackPanel { Spacing = 18, Margin = new Thickness(20) };
-        content.Children.AddRange([Section("GitLab", gitLab), Section("Obnovování", refresh), Section("Vzhled", look), quit]);
+        sync = new SyncSection(state);
+        content.Children.AddRange([Section("GitLab", gitLab), Section("Synchronizace", sync), Section("Obnovování", refresh), Section("Vzhled", look), quit]);
         Content = content;
         Update();
     }
@@ -132,6 +134,7 @@ public sealed class SettingsWindow : Window
         interval.SelectedItem = interval.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (double)i.Tag! == state.RefreshMinutes);
         keepInTray.IsChecked = state.KeepInTray;
         theme.SelectedItem = theme.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag! == state.Theme) ?? theme.Items[0];
+        sync.Update();
     }
 
     private Control AccountRow(GitLabAccount account)

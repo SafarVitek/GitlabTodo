@@ -30,5 +30,6 @@ Testy logiky (pořadí, čekání, timeline, párování issue a MR, odkazy) spu
 
 - Aplikace je podepsaná ad-hoc, bez Apple Developer účtu. Po každém novém buildu se macOS jednou zeptá
   na přístup ke Keychainu, kde jsou tokeny. Stačí „Vždy povolit“.
-- Data (pořadí, vazby, poslední stav pro widget) leží v `~/Library/Application Support/GitLabTodo/`.
+- Data (pořadí, vazby, poznámky, poslední stav pro widget, stav synchronizace) leží v
+  `~/Library/Application Support/GitLabTodo/`.
 - Widget je sandboxovaný a z té složky jen čte, s aplikací se domlouvá přes odkazy `gitlabtodo://`.

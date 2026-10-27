@@ -21,6 +21,7 @@ struct SettingsView: View {
                     draft = AccountDraft()
                 }
             }
+            SyncSection()
             Section("Obnovování") {
                 Picker("Interval", selection: Binding(get: { model.refreshInterval }, set: { model.setRefreshInterval($0) })) {
                     ForEach(AppModel.refreshIntervals, id: \.self) { interval in
@@ -37,7 +38,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 500, height: 420)
+        .frame(width: 520, height: 640)
         .sheet(item: $draft) { draft in
             AccountEditor(draft: draft)
         }
@@ -243,5 +244,143 @@ private struct AccountEditor: View {
         let typed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         model.saveAccount(account, token: typed.isEmpty ? nil : typed)
         dismiss()
+    }
+}
+
+/// The plan kept in a repository on one of the GitLabs, so that other devices see the same order, links and notes.
+private struct SyncSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var accountID: UUID?
+    @State private var project = ""
+    @State private var isCreating = false
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            Picker("GitLab", selection: $accountID) {
+                Text("Vypnuto").tag(UUID?.none)
+                ForEach(model.accounts) { account in
+                    Text(account.name).tag(UUID?.some(account.id))
+                }
+            }
+            if accountID != nil {
+                TextField("Repozitář", text: $project, prompt: Text("skupina/gitlab-todo-data"))
+                HStack {
+                    Button("Vytvořit soukromé repo", action: createRepository)
+                        .disabled(isCreating)
+                        .help("Založí soukromý repozitář gitlab-todo-data pod tvým účtem")
+                    if isCreating {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Spacer()
+                    Button("Použít", action: apply)
+                        .disabled(!hasChanges || Self.projectPath(project).isEmpty)
+                }
+            }
+            if let state = model.syncState, !hasChanges {
+                HStack {
+                    status(state)
+                    Spacer()
+                    Button("Synchronizovat teď") {
+                        Task { await model.syncPlan() }
+                    }
+                    .disabled(model.syncStatus == .syncing)
+                }
+                if let visibility = state.visibility, visibility != "private" {
+                    Label("Repozitář není soukromý, poznámky v něm uvidí i ostatní.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("Synchronizace")
+        } footer: {
+            Text("Pořadí, vazby, odklady a poznámky se ukládají do souboru gitlab-todo.json v tomto repozitáři, změny se odešlou při obnovení. Na dalším počítači zvol stejný GitLab a repozitář. Tokeny ani nastavení se nesynchronizují.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            accountID = model.syncState?.settings.accountID
+            project = model.syncState?.settings.project ?? ""
+        }
+        .onChange(of: accountID) {
+            error = nil
+            // Turning it off needs no confirming.
+            if accountID == nil, model.syncState != nil {
+                model.configureSync(nil)
+            }
+        }
+    }
+
+    private var hasChanges: Bool {
+        accountID != model.syncState?.settings.accountID || Self.projectPath(project) != (model.syncState?.settings.project ?? "")
+    }
+
+    @ViewBuilder
+    private func status(_ state: SyncState) -> some View {
+        switch model.syncStatus {
+        case .syncing:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Synchronizuji…")
+            }
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .lineLimit(3)
+        case .synced(let date):
+            Label("Synchronizováno \(date.formatted(.relative(presentation: .named)))", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .idle:
+            if let date = state.syncedAt {
+                Text("Synchronizováno \(date.formatted(.relative(presentation: .named)))")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Zatím nesynchronizováno")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func apply() {
+        guard let accountID else { return }
+        error = nil
+        model.configureSync(SyncSettings(accountID: accountID, project: Self.projectPath(project)))
+    }
+
+    private func createRepository() {
+        guard let accountID else { return }
+        isCreating = true
+        error = nil
+        Task {
+            do {
+                project = try await model.createSyncRepository(accountID: accountID)
+                apply()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            isCreating = false
+        }
+    }
+
+    /// `group/project` also from a pasted URL of the repository.
+    static func projectPath(_ input: String) -> String {
+        var path = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: path), url.scheme?.hasPrefix("http") == true {
+            path = url.path()
+        }
+        if let range = path.range(of: "/-/") {
+            path = String(path[..<range.lowerBound])
+        }
+        if path.hasSuffix(".git") {
+            path.removeLast(4)
+        }
+        return path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 }

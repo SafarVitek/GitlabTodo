@@ -31,6 +31,10 @@ public sealed class AppState
     private Dictionary<Guid, List<TodoItem>> fetchedItems = [];
     private bool refreshPending;
     private CancellationTokenSource? timer;
+    private SyncState? syncState;
+    private CancellationTokenSource? syncDelay;
+    private bool isSyncing;
+    private bool syncPending;
 
     public AppState(IUserInterface ui)
     {
@@ -39,6 +43,7 @@ public sealed class AppState
         var stored = Storage.Load<Dictionary<string, string>>(Storage.TokensPath) ?? [];
         tokens = stored.Where(t => Guid.TryParse(t.Key, out _)).ToDictionary(t => Guid.Parse(t.Key), t => t.Value);
         plan = Storage.Load<Plan>(Storage.PlanPath) ?? new Plan();
+        syncState = Storage.Load<SyncState>(Storage.SyncPath);
 
         // Start from the last known state, so the list is not empty until the first refresh finishes.
         if (Storage.Load<Snapshot>(Storage.SnapshotPath) is { } snapshot)
@@ -92,6 +97,10 @@ public sealed class AppState
     public Dictionary<string, int> TimelineDelays => plan.Delays;
     /// An item whose notes open for writing once it is shown.
     public string? NoteToEdit { get; private set; }
+    /// Syncing the plan through a GitLab repository, null while it is off.
+    public SyncState? SyncState => syncState;
+    public SyncStatus SyncStatus { get; private set; }
+    public string? SyncError { get; private set; }
     public double RefreshMinutes => settings.RefreshMinutes > 0 ? settings.RefreshMinutes : 5;
     public bool KeepInTray => settings.KeepInTray;
     public double TimelineZoom => settings.TimelineZoom;
@@ -165,6 +174,7 @@ public sealed class AppState
                 await FetchAll();
             }
             while (refreshPending);
+            await SyncPlan();
         }
         finally
         {
@@ -815,6 +825,7 @@ public sealed class AppState
     {
         SavePlan();
         RebuildItems();
+        ScheduleSync();
     }
 
     private void SavePlan()
@@ -1181,6 +1192,10 @@ public sealed class AppState
         // Notes outlive their items, not their GitLab.
         plan.Notes = plan.Notes.Where(n => !n.Key.StartsWith(account.Id.IdString() + ":", StringComparison.Ordinal)).ToDictionary();
         SavePlan();
+        if (syncState?.Settings.AccountId == account.Id)
+        {
+            ConfigureSync(null);
+        }
         SaveSettings();
         RebuildItems();
     }
@@ -1229,7 +1244,152 @@ public sealed class AppState
             TrySave(Storage.TokensPath, tokens.ToDictionary(t => t.Key.IdString(), t => t.Value), isPrivate: true);
         }
     }
+    // MARK: Sync
+
+    /// Turns syncing on with a repository, or off with null. A new repository starts from scratch: the first sync
+    /// merges what is there with this device's plan.
+    public void ConfigureSync(SyncSettings? settings)
+    {
+        syncDelay?.Cancel();
+        syncState = settings is null ? null : new SyncState { Settings = settings };
+        SyncStatus = SyncStatus.Idle;
+        SyncError = null;
+        SaveSyncState();
+        Changed?.Invoke();
+        if (settings is not null)
+        {
+            _ = SyncPlan();
+        }
+    }
+
+    /// A private repository named `gitlab-todo-data` in the user's namespace; returns its `group/project` path.
+    public async Task<string> CreateSyncRepository(Guid accountId)
+    {
+        var account = Accounts.FirstOrDefault(a => a.Id == accountId) ?? throw GitLabException.MissingToken;
+        return (await Client(account).CreatePrivateProject("gitlab-todo-data")).PathWithNamespace;
+    }
+
+    /// Exchanges the plan with the repository. Runs after every refresh and shortly after a change on this device.
+    public async Task SyncPlan()
+    {
+        if (isPreview || syncState is null)
+        {
+            return;
+        }
+        if (isSyncing)
+        {
+            syncPending = true;
+            return;
+        }
+        isSyncing = true;
+        try
+        {
+            do
+            {
+                syncPending = false;
+                if (syncState is not { } state || Accounts.FirstOrDefault(a => a.Id == state.Settings.AccountId) is not { } account)
+                {
+                    return;
+                }
+                SyncStatus = SyncStatus.Syncing;
+                Changed?.Invoke();
+                try
+                {
+                    var client = Client(account);
+                    var project = await client.Project(state.Settings.Project);
+                    var store = new GitLabPlanStore(client, project.Id, project.DefaultBranch ?? "main");
+                    var started = PlanSync.Copy(plan);
+                    var (synced, next) = await PlanSync.Sync(started, state, store, Accounts);
+                    // The settings changed while syncing, this result belongs to the old repository.
+                    if (syncState?.Settings != state.Settings)
+                    {
+                        continue;
+                    }
+                    // What changed on this device in the meantime stays, the next sync sends it.
+                    if (!PlanSync.Same(plan, started))
+                    {
+                        synced = PlanSync.Merge(started, plan, synced);
+                    }
+                    next.Base = next.Base is null ? null : PlanSync.Copy(next.Base);
+                    next.SyncedAt = DateTimeOffset.Now;
+                    next.Visibility = project.Visibility;
+                    syncState = next;
+                    SaveSyncState();
+                    if (!PlanSync.Same(synced, plan))
+                    {
+                        plan = PlanSync.Copy(synced);
+                        SavePlan();
+                        RebuildItems();
+                    }
+                    SyncStatus = SyncStatus.Synced;
+                    SyncError = null;
+                }
+                catch (Exception exception) when (exception is GitLabException or HttpRequestException or TaskCanceledException or JsonException)
+                {
+                    SyncStatus = SyncStatus.Failed;
+                    SyncError = Describe(exception);
+                }
+                Changed?.Invoke();
+            }
+            while (syncPending);
+        }
+        finally
+        {
+            isSyncing = false;
+        }
+    }
+
+    /// Changes go out a little later, after a burst of editing, rather than with every keystroke.
+    private void ScheduleSync()
+    {
+        if (isPreview || syncState is null)
+        {
+            return;
+        }
+        syncDelay?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        syncDelay = cancellation;
+        _ = SyncLater(cancellation.Token);
+    }
+
+    private async Task SyncLater(CancellationToken cancellation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(20), cancellation);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        await SyncPlan();
+    }
+
+    private void SaveSyncState()
+    {
+        if (isPreview)
+        {
+            return;
+        }
+        if (syncState is null)
+        {
+            File.Delete(Storage.SyncPath);
+        }
+        else
+        {
+            TrySave(Storage.SyncPath, syncState);
+        }
+    }
 }
+
+public enum SyncStatus
+{
+    Idle,
+    Syncing,
+    Synced,
+    Failed,
+}
+
 
 internal static class ReadOnlyListExtensions
 {

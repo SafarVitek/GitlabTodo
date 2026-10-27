@@ -242,7 +242,11 @@ public sealed class MainWindow : Window
         {
             parts.Errors.Children.Add(Views.IconLabel(IconKind.WarningFilled, $"{account.Name}: {state.AccountErrors[account.Id]}", Paint.Waiting(), 12));
         }
-        parts.ErrorBanner.IsVisible = failing.Count > 0;
+        if (state.SyncStatus == SyncStatus.Failed)
+        {
+            parts.Errors.Children.Add(Views.IconLabel(IconKind.Refresh, $"Synchronizace: {state.SyncError}", Paint.Waiting(), 12));
+        }
+        parts.ErrorBanner.IsVisible = parts.Errors.Children.Count > 0;
 
         parts.OrderList.IsVisible = !isTimeline;
         parts.Timeline.IsVisible = isTimeline;

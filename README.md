@@ -28,6 +28,7 @@ Aplikace je ve dvou verzích se stejnými funkcemi a stejným formátem dat:
   kde je položka odložená. Přetahování, vazby šipkou z tečky na bloku, zoom.
 - Jedním kliknutím (s potvrzením) vytvořit k issue větev a draft MR, nebo draft MR označit jako ready
   a přidat výchozího reviewera.
+- Synchronizace mezi počítači (i mezi macOS a Linuxem) přes soubor v repozitáři na tvém GitLabu.
 
 ## Instalace
 
@@ -61,6 +62,15 @@ a balíček `packages.${system}.default` (nebo overlay `overlays.default`) do sv
 Aplikace se spouští jako „GitLab Todo“ z menu aplikací nebo příkazem `gitlab-todo`. Po zavření okna
 běží dál v systémové liště, na GNOME k tomu potřebuješ rozšíření AppIndicator. Víc v
 [`linux/README.md`](linux/README.md).
+
+## Synchronizace mezi počítači
+
+V nastavení v sekci Synchronizace zvol GitLab a repozitář, nebo nech aplikaci založit soukromý
+`gitlab-todo-data`. Pořadí, vazby, odklady, cizí položky v timeline a poznámky se pak ukládají do souboru
+`gitlab-todo.json` v tom repozitáři. Odesílají se při každém obnovení a chvíli po změně, commit vznikne jen
+když se něco změnilo. Na dalším počítači zvol stejný GitLab a repozitář a data se sloučí s tím, co tam už je.
+Když se mezitím změní na dvou místech, sloučí se: co změnilo jen jedno zařízení, platí, u poznámky upravené na
+obou vyhraje novější. Tokeny ani nastavení se nesynchronizují. Repozitář nech soukromý, jsou v něm i poznámky.
 
 ## Přístup ke GitLabu
 
