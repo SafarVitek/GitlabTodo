@@ -114,6 +114,8 @@ internal sealed class TimelineCanvas : Control
     private LinkDrag? link;
     private BlockDrag? drag;
     private Point viewportPointer;
+    /// The pointer holding a block or a dot, while it holds it.
+    private IPointer? holding;
     private (TimelineSchedule Schedule, string? Selection, double Zoom)? pending;
 
     public TimelineCanvas(AppState state, ScrollViewer scroller)
@@ -688,7 +690,7 @@ internal sealed class TimelineCanvas : Control
         {
             case HandleHit handle:
                 link = new LinkDrag(handle.Block, handle.Center, point.Position);
-                e.Pointer.Capture(this);
+                Hold(e.Pointer);
                 break;
             case PlusHit plus:
                 OpenLaneSearch(plus.Lane);
@@ -702,7 +704,7 @@ internal sealed class TimelineCanvas : Control
                     Selected?.Invoke(item.Id);
                 }
                 drag = new BlockDrag(block.Block, block.Lane, point.Position, point.Position - block.Frame.TopLeft, point.Position, false);
-                e.Pointer.Capture(this);
+                Hold(e.Pointer);
                 break;
         }
         e.Handled = true;
@@ -711,6 +713,11 @@ internal sealed class TimelineCanvas : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        // A release that never arrived: the button is up, so nothing is held any more.
+        if ((link is not null || drag is not null) && (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !IsHolding))
+        {
+            EndDrags();
+        }
         var position = e.GetPosition(this);
         viewportPointer = e.GetPosition(scroller);
         if (link is not null)
@@ -767,6 +774,10 @@ internal sealed class TimelineCanvas : Control
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
+        if ((link is not null || drag is not null) && !IsHolding)
+        {
+            EndDrags();
+        }
         if (hover != Hit.None && link is null && drag is null)
         {
             hover = Hit.None;
@@ -785,10 +796,20 @@ internal sealed class TimelineCanvas : Control
         base.OnPointerWheelChanged(e);
     }
 
+    /// Only the pointer that pressed on a block or a dot drags, and only while it holds the capture.
+    private bool IsHolding => holding?.Captured == this;
+
+    private void Hold(IPointer pointer)
+    {
+        holding = pointer;
+        pointer.Capture(this);
+    }
+
     private void EndDrags()
     {
         link = null;
         drag = null;
+        holding = null;
         autoScroll.Stop();
         Cursor = null;
         InvalidateVisual();
@@ -829,6 +850,12 @@ internal sealed class TimelineCanvas : Control
     /// Only while the pointer is level with the timeline, give or take a little.
     private void ScrollTowardsPointer()
     {
+        // Only while something is dragged; never from a timer left running.
+        if (!IsHolding || (link is null && drag is not { IsMoving: true }))
+        {
+            EndDrags();
+            return;
+        }
         var viewport = scroller.Viewport;
         if (viewportPointer.Y < -40 || viewportPointer.Y > viewport.Height + 40)
         {

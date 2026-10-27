@@ -30,6 +30,8 @@ public sealed class OrderList : Panel
     private int destination;
     private double pointerY;
     private bool rebuildPending;
+    /// The pointer holding a row, while it holds it.
+    private IPointer? holding;
 
     public OrderList(AppState state)
     {
@@ -121,6 +123,7 @@ public sealed class OrderList : Panel
         }
         Selected?.Invoke(row.Item.Id);
         press = (rows.Children.IndexOf(row), point.Position);
+        holding = e.Pointer;
         e.Pointer.Capture(rows);
         e.Handled = true;
     }
@@ -129,6 +132,12 @@ public sealed class OrderList : Panel
     {
         if (press is not { } started)
         {
+            return;
+        }
+        // A release that never arrived: the button is up, so no row is held any more.
+        if (!e.GetCurrentPoint(rows).Properties.IsLeftButtonPressed || holding?.Captured != rows)
+        {
+            EndDrag();
             return;
         }
         var position = e.GetPosition(rows);
@@ -166,6 +175,7 @@ public sealed class OrderList : Panel
     private void EndDrag()
     {
         press = null;
+        holding = null;
         isDragging = false;
         autoScroll.Stop();
         insertion.IsVisible = false;
@@ -206,6 +216,12 @@ public sealed class OrderList : Panel
     /// Scrolls while a row is dragged near the top or bottom edge, faster the closer it is.
     private void ScrollTowardsPointer()
     {
+        // Only while a row is dragged; never from a timer left running.
+        if (!isDragging || holding?.Captured != rows)
+        {
+            EndDrag();
+            return;
+        }
         var height = scroller.Viewport.Height;
         var step = pointerY < Edge ? -Speed(Edge - pointerY) : pointerY > height - Edge ? Speed(pointerY - (height - Edge)) : 0;
         if (step == 0)

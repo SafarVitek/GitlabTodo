@@ -54,8 +54,9 @@ void Click(Point point, MouseButton button = MouseButton.Left)
 void Drag(Point from, Point to)
 {
     window.MouseDown(from, MouseButton.Left);
-    window.MouseMove(from + new Vector(8, -8));
-    window.MouseMove(to);
+    // The button stays down while moving, as the system reports it.
+    window.MouseMove(from + new Vector(8, -8), RawInputModifiers.LeftMouseButton);
+    window.MouseMove(to, RawInputModifiers.LeftMouseButton);
     Pump();
     window.MouseUp(to, MouseButton.Left);
     Pump();
@@ -146,6 +147,52 @@ Pump();
 window.MouseWheel(BlockCenter("backend#33"), new Vector(0, 1), RawInputModifiers.Control);
 Pump();
 Check(Math.Abs(state.TimelineZoom - 1.1) < 0.001, $"Ctrl + wheel zooms: {state.TimelineZoom}");
+
+// Scrolling at the edge: only while a block is held.
+var timelineScroller = canvas.FindAncestorOfType<ScrollViewer>()!;
+// Timers do not run in the headless platform, so its ticks are called the way the timer would.
+var autoScroll = (DispatcherTimer)canvas.GetType().GetField("autoScroll", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(canvas)!;
+var scrollTick = canvas.GetType().GetMethod("ScrollTowardsPointer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+void ScrollTicks(int count)
+{
+    for (var tick = 0; tick < count; tick++)
+    {
+        scrollTick.Invoke(canvas, null);
+        Pump();
+    }
+}
+Point RightEdge() => timelineScroller.TranslatePoint(new Point(timelineScroller.Bounds.Width - 8, timelineScroller.Bounds.Height / 3), window)!.Value;
+void ResetScroll()
+{
+    timelineScroller.Offset = new Vector(0, 0);
+    Pump();
+}
+ResetScroll();
+window.MouseMove(BlockCenter("backend#12"));
+window.MouseMove(RightEdge());
+ScrollTicks(15);
+Check(timelineScroller.Offset.X == 0, $"hovering out to the right edge does not scroll: {timelineScroller.Offset.X}");
+var held = BlockCenter("backend#12");
+window.MouseDown(held, MouseButton.Left);
+window.MouseMove(held + new Vector(12, 0), RawInputModifiers.LeftMouseButton);
+window.MouseMove(RightEdge(), RawInputModifiers.LeftMouseButton);
+// The release never arrives, the next move has the button up.
+window.MouseMove(RightEdge() - new Vector(2, 0));
+ScrollTicks(15);
+Check(timelineScroller.Offset.X == 0 && !autoScroll.IsEnabled, $"a missed release stops it: {timelineScroller.Offset.X}");
+// Lets the simulated mouse go, and presses elsewhere so that it is not a double click.
+window.MouseUp(RightEdge(), MouseButton.Left);
+Pump();
+held = BlockCenter("infra#5");
+window.MouseDown(held, MouseButton.Left);
+window.MouseMove(held + new Vector(12, 0), RawInputModifiers.LeftMouseButton);
+window.MouseMove(RightEdge(), RawInputModifiers.LeftMouseButton);
+ScrollTicks(15);
+var scrolled = timelineScroller.Offset.X;
+window.MouseUp(RightEdge(), MouseButton.Left);
+ScrollTicks(10);
+Check(scrolled > 0 && timelineScroller.Offset.X == scrolled && !autoScroll.IsEnabled, $"a held block scrolls at the edge, the release stops it: {scrolled}");
+ResetScroll();
 
 // A theme switch rebuilds the window, settings change the refresh.
 Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
