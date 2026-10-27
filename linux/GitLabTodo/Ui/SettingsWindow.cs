@@ -15,6 +15,7 @@ public sealed class SettingsWindow : Window
     private StackPanel accounts = null!;
     private ComboBox interval = null!;
     private CheckBox keepInTray = null!;
+    private ComboBox theme = null!;
 
     public SettingsWindow(AppState state, Shell shell)
     {
@@ -37,6 +38,20 @@ public sealed class SettingsWindow : Window
         accounts = new StackPanel { Spacing = 6 };
         interval = new ComboBox { MinWidth = 120 };
         keepInTray = new CheckBox { Content = "Po zavření okna běžet dál v systémové liště" };
+        theme = new ComboBox { MinWidth = 160 };
+        foreach (var (key, name) in new[] { ("system", "Podle systému"), ("light", "Světlý"), ("dark", "Tmavý") })
+        {
+            theme.Items.Add(new ComboBoxItem { Content = name, Tag = key });
+        }
+        theme.SelectionChanged += (_, _) =>
+        {
+            if (theme.SelectedItem is ComboBoxItem { Tag: string key } && key != state.Theme)
+            {
+                state.SetTheme(key);
+                // The windows rebuild for the new theme, not while this list is still handling the pick.
+                Dispatcher.UIThread.Post(() => Shell.ApplyTheme(key));
+            }
+        };
         var autostart = new CheckBox { Content = "Spouštět po přihlášení" };
         var autostartError = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, IsVisible = false };
         var add = new Button { Content = "Přidat GitLab…" };
@@ -76,8 +91,9 @@ public sealed class SettingsWindow : Window
         gitLab.Children.AddRange([accounts, add]);
         var refresh = new StackPanel { Spacing = 10 };
         refresh.Children.AddRange([Field("Interval", interval), keepInTray, autostart, autostartError]);
+        var look = Field("Motiv", theme);
         var content = new StackPanel { Spacing = 18, Margin = new Thickness(20) };
-        content.Children.AddRange([Section("GitLab", gitLab), Section("Obnovování", refresh), quit]);
+        content.Children.AddRange([Section("GitLab", gitLab), Section("Obnovování", refresh), Section("Vzhled", look), quit]);
         Content = content;
         Update();
     }
@@ -115,6 +131,7 @@ public sealed class SettingsWindow : Window
         }
         interval.SelectedItem = interval.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (double)i.Tag! == state.RefreshMinutes);
         keepInTray.IsChecked = state.KeepInTray;
+        theme.SelectedItem = theme.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag! == state.Theme) ?? theme.Items[0];
     }
 
     private Control AccountRow(GitLabAccount account)
@@ -165,8 +182,7 @@ public sealed class AccountEditor : Window
     private readonly TextBox token = new() { PasswordChar = '•' };
     private readonly TextBox targetBranch = new() { Watermark = "master" };
     private readonly TextBox reviewer = new() { Watermark = "uživatelské jméno" };
-    private readonly Button createToken = new() { Content = "Vytvořit token přes SSH", HorizontalAlignment = HorizontalAlignment.Right };
-    private readonly TextBlock hint = new() { FontSize = 11.5, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock hint = new() { Text = "Personal Access Token musí mít scope api.", FontSize = 11.5, TextWrapping = TextWrapping.Wrap };
     private readonly ContentControl status = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Button verify = new() { Content = "Ověřit" };
     private readonly Button save = new() { Content = "Uložit", IsDefault = true };
@@ -194,7 +210,6 @@ public sealed class AccountEditor : Window
         {
             field.TextChanged += (_, _) => UpdateButtons();
         }
-        createToken.Click += (_, _) => _ = CreateTokenOverSsh();
         verify.Click += (_, _) => _ = Verify();
         save.Click += (_, _) => Save();
         var cancel = new Button { Content = "Zrušit", IsCancel = true };
@@ -204,7 +219,7 @@ public sealed class AccountEditor : Window
         var connection = new StackPanel { Spacing = 10 };
         connection.Children.AddRange([SettingsWindow.Field("Název", name), SettingsWindow.Field("URL", url)]);
         var auth = new StackPanel { Spacing = 10 };
-        auth.Children.AddRange([SettingsWindow.Field("Token", token), createToken, hint]);
+        auth.Children.AddRange([SettingsWindow.Field("Token", token), hint]);
         var actions = new StackPanel { Spacing = 10 };
         actions.Children.AddRange([SettingsWindow.Field("Cílová větev MR", targetBranch), SettingsWindow.Field("Výchozí reviewer", reviewer)]);
         var footer = new DockPanel();
@@ -224,8 +239,6 @@ public sealed class AccountEditor : Window
 
     private Uri? ApiUrl => GitLabAccount.ApiUrlFrom(url.Text ?? "");
 
-    private string? SshTarget => ApiUrl?.Host is { Length: > 0 } host ? $"git@{host}" : null;
-
     private string EffectiveToken
     {
         get
@@ -237,9 +250,6 @@ public sealed class AccountEditor : Window
 
     private void UpdateButtons()
     {
-        hint.Text = "Personal Access Token se scope api, akce zakládají větve a MR. Tlačítko SSH ho vytvoří příkazem "
-            + $"„ssh {SshTarget ?? "git@…"} personal_access_token“ pomocí tvého SSH klíče (platnost 365 dní).";
-        createToken.IsEnabled = SshTarget is not null && !isWorking;
         verify.IsEnabled = ApiUrl is not null && EffectiveToken.Length > 0 && !isWorking;
         save.IsEnabled = (name.Text ?? "").Trim().Length > 0 && ApiUrl is not null && EffectiveToken.Length > 0;
     }
@@ -296,29 +306,6 @@ public sealed class AccountEditor : Window
         catch (Exception exception) when (exception is GitLabException or HttpRequestException or TaskCanceledException)
         {
             ShowStatus(exception is TaskCanceledException ? "GitLab neodpověděl včas" : exception.Message, IconKind.WarningFilled, Paint.Brush(Palette.Threads));
-        }
-        finally
-        {
-            SetWorking(false);
-        }
-    }
-
-    private async Task CreateTokenOverSsh()
-    {
-        if (SshTarget is not { } target)
-        {
-            return;
-        }
-        SetWorking(true);
-        ShowStatus("Vytvářím token přes SSH…", null, Paint.Secondary);
-        try
-        {
-            token.Text = await SshTokenCreator.Create(target);
-            ShowStatus("Token vytvořen, nezapomeň uložit", IconKind.CheckCircle, Paint.Brush(Palette.Ready));
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            ShowStatus(exception.Message, IconKind.WarningFilled, Paint.Brush(Palette.Threads));
         }
         finally
         {

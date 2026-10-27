@@ -38,7 +38,15 @@ public sealed class App : Application
     {
         Name = "GitLab Todo";
         RequestedThemeVariant = ThemeVariant.Default;
-        Styles.Add(new FluentTheme());
+        Styles.Add(new FluentTheme
+        {
+            Palettes =
+            {
+                [ThemeVariant.Light] = new ColorPaletteResources { Accent = Paint.Accent, RegionColor = Colors.White },
+                [ThemeVariant.Dark] = new ColorPaletteResources { Accent = Paint.Accent, RegionColor = Color.Parse("#1F1F22") },
+            },
+        });
+        Styles.Add(new Look());
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -49,6 +57,7 @@ public sealed class App : Application
             var isPreview = args.Contains("--preview");
             var ui = new DesktopUserInterface();
             var state = isPreview ? new AppState(ui, PreviewData.Snapshot()) : new AppState(ui);
+            Shell.ApplyTheme(state.Theme);
             new Shell(this, desktop, state, ui).Start(showsWindow: !args.Contains("--hidden"), listens: !isPreview);
         }
         base.OnFrameworkInitializationCompleted();

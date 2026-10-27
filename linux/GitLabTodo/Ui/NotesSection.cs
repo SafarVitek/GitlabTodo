@@ -179,16 +179,30 @@ public sealed partial class NotesSection : StackPanel
             Foreground = task.IsDone ? Paint.Secondary : Paint.Primary(),
             TextDecorations = task.IsDone ? TextDecorations.Strikethrough : null,
         };
-        var box = new CheckBox { Content = label, IsChecked = task.IsDone, MinHeight = 0, Padding = new Thickness(6, 0, 0, 0) };
-        ToolTip.SetTip(box, task.IsDone ? "Vrátit jako nehotové" : "Hotovo");
-        box.IsCheckedChanged += (_, _) =>
+        // A compact box of its own: Fluent's check box is a whole line tall.
+        var box = new Border
         {
-            if (item is { } current)
-            {
-                state.ToggleTask(task.Line, current.Id);
-            }
+            Child = new Icon(task.IsDone ? IconKind.CheckboxChecked : IconKind.Checkbox, task.IsDone ? Paint.Brush(Palette.Ready) : Paint.Secondary, 16),
+            Padding = new Thickness(0, 1, 8, 0),
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            VerticalAlignment = VerticalAlignment.Top,
         };
-        return box;
+        ToolTip.SetTip(box, task.IsDone ? "Vrátit jako nehotové" : "Hotovo");
+        box.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed || item is not { } current)
+            {
+                return;
+            }
+            // Not a click into the note to edit it.
+            e.Handled = true;
+            state.ToggleTask(task.Line, current.Id);
+        };
+        var row = new DockPanel();
+        DockPanel.SetDock(box, Dock.Left);
+        row.Children.AddRange([box, label]);
+        return row;
     }
 
     [GeneratedRegex(@"^(\s*)[-*+]\s+(.*)$")]

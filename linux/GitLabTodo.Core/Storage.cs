@@ -62,6 +62,8 @@ public sealed class Settings
     public double TimelineZoom { get; set; } = 1;
     /// Closing the window keeps the app running in the system tray.
     public bool KeepInTray { get; set; } = true;
+    /// `system`, `light` or `dark`.
+    public string Theme { get; set; } = "system";
 }
 
 /// Files under the XDG folders: settings and tokens in `~/.config/gitlab-todo`, the plan and the last refresh in

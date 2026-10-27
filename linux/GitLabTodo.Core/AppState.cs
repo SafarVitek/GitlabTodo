@@ -95,6 +95,7 @@ public sealed class AppState
     public double RefreshMinutes => settings.RefreshMinutes > 0 ? settings.RefreshMinutes : 5;
     public bool KeepInTray => settings.KeepInTray;
     public double TimelineZoom => settings.TimelineZoom;
+    public string Theme => settings.Theme;
 
     public string? Token(Guid accountId) => tokens.GetValueOrDefault(accountId);
 
@@ -1195,6 +1196,13 @@ public sealed class AppState
     public void SetKeepInTray(bool keep)
     {
         settings.KeepInTray = keep;
+        SaveSettings();
+        Changed?.Invoke();
+    }
+
+    public void SetTheme(string theme)
+    {
+        settings.Theme = theme;
         SaveSettings();
         Changed?.Invoke();
     }

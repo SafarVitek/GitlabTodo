@@ -63,10 +63,11 @@ void Drag(Point from, Point to)
 List<Control> Rows() => window.GetVisualDescendants().OfType<Control>().Where(c => c.GetType().Name == "Row" && c.IsEffectivelyVisible).ToList();
 Segmented Mode() => window.GetVisualDescendants().OfType<Segmented>().First();
 
-// Sidebar: a click on an entry filters the list. Rebuilding it inside its own selection event crashed the app.
+// Sidebar: a click on an entry filters the list. Rebuilding the old list box inside its selection event crashed the app.
 foreach (var (name, count) in new[] { ("backend", 4), ("Čeká", 4), ("infra", 2), ("Vše", 11) })
 {
-    var entry = window.GetVisualDescendants().OfType<ListBoxItem>().First(i => i.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == name));
+    var entry = window.GetVisualDescendants().OfType<Control>()
+        .First(c => c.GetType().Name == "Entry" && c.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == name));
     Click(Center(entry));
     Check(Rows().Count == count, $"sidebar {name} shows {count} items: {Rows().Count}");
 }
@@ -88,7 +89,7 @@ window.KeyTextInput("- [ ] poslat zápis");
 window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
 Pump();
 Check(Item("infra#5").Note?.Text == "Meeting s týmem\n- [ ] poslat zápis", $"note saved: {Item("infra#5").Note?.Text}");
-Click(Center(notes.GetVisualDescendants().OfType<CheckBox>().First()));
+Click(Center(notes.GetVisualDescendants().OfType<Icon>().First(i => i.Kind == IconKind.Checkbox)));
 Check(Item("infra#5").Note?.OpenTasks.Count == 0, "task ticked off in the note");
 
 // Blocker search: the own items offered before typing, picked with a click.
@@ -158,6 +159,9 @@ Pump();
 settings.GetVisualDescendants().OfType<ComboBox>().First().SelectedIndex = 0;
 Pump();
 Check(state.RefreshMinutes == AppState.RefreshIntervals[0], $"refresh interval picked: {state.RefreshMinutes} min");
+settings.GetVisualDescendants().OfType<ComboBox>().ElementAt(1).SelectedIndex = 1;
+Pump();
+Check(state.Theme == "light" && Application.Current.ActualThemeVariant == ThemeVariant.Light && Rows().Count == 11, "light theme picked, the window rebuilt for it");
 
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");
 return failures == 0 ? 0 : 1;

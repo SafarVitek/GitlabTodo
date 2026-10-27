@@ -64,9 +64,8 @@ běží dál v systémové liště, na GNOME k tomu potřebuješ rozšíření A
 
 ## Přístup ke GitLabu
 
-V nastavení přidáš URL GitLabu a Personal Access Token se scope `api`. `read_api` stačí na čtení,
-`api` je potřeba na vytváření větví a merge requestů. Token jde vytvořit i přes SSH
-(`ssh git@<host> personal_access_token gitlab-todo api 365`), na to má nastavení tlačítko.
+V nastavení přidáš URL GitLabu a Personal Access Token se scope `api`, který je potřeba na vytváření
+větví a merge requestů.
 
 ## Licence
 

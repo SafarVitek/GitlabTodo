@@ -191,7 +191,7 @@ public sealed class Segmented : Border
         for (var position = 0; position < segments.Count; position++)
         {
             var isSelected = position == selected;
-            segments[position].Background = isSelected ? Paint.ControlBackground : position == hovered && IsEnabled ? Paint.Primary(0.05) : Brushes.Transparent;
+            segments[position].Background = isSelected ? (Paint.IsDark ? Paint.Primary(0.16) : Paint.Background) : position == hovered && IsEnabled ? Paint.Primary(0.05) : Brushes.Transparent;
             segments[position].BoxShadow = isSelected ? Lifted : default;
         }
     }
@@ -338,15 +338,14 @@ public static class Views
         return row;
     }
 
-    public static Button IconButton(IconKind icon, string tip, Action action, double size = 15)
+    public static Button IconButton(IconKind icon, string tip, Action action, double size = 16)
     {
         var button = new Button
         {
-            Content = new Icon(icon, null, size),
-            Padding = new Thickness(6),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
+            Content = new Icon(icon, Paint.Primary(0.75), size),
+            Padding = new Thickness(7),
             VerticalAlignment = VerticalAlignment.Center,
+            Classes = { "subtle" },
         };
         ToolTip.SetTip(button, tip);
         button.Click += (_, _) => action();
@@ -364,9 +363,10 @@ public static class Views
                 Label(large ? step.Action.Title() : step.Action.ShortTitle().TrimStart('+', ' '), large ? 13 : 11.5, Brushes.White, FontWeight.SemiBold)),
             Background = step.Action.IsProminent() ? Paint.AccentBrush() : Paint.Kind(ItemKind.MergeRequest),
             Foreground = Brushes.White,
-            Padding = large ? new Thickness(12, 8) : new Thickness(8, 2),
-            CornerRadius = new CornerRadius(large ? 7 : 5),
+            Padding = large ? new Thickness(14, 9) : new Thickness(9, 3),
+            CornerRadius = new CornerRadius(large ? 8 : 6),
             IsEnabled = !isRunning,
+            Classes = { "filled" },
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = large ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
             HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -389,8 +389,8 @@ public static class Views
         {
             Content = circle,
             Padding = new Thickness(0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
+            Classes = { "subtle" },
+            CornerRadius = new CornerRadius(size),
             Cursor = new Cursor(StandardCursorType.Hand),
             IsEnabled = !state.RunningActions.Contains(step.Target.Id),
             VerticalAlignment = VerticalAlignment.Top,
@@ -404,9 +404,9 @@ public static class Views
     public static Border Box(Control child) => new()
     {
         Child = child,
-        Padding = new Thickness(10),
-        CornerRadius = new CornerRadius(8),
-        Background = Paint.Primary(0.05),
+        Padding = new Thickness(12, 10),
+        CornerRadius = new CornerRadius(9),
+        Background = Paint.Surface,
     };
 
     public static Control SectionTitle(string title, IconKind icon) => IconLabel(icon, title, Paint.Secondary, 13, FontWeight.SemiBold);

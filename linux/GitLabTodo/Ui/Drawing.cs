@@ -40,6 +40,8 @@ public enum IconKind
     Trash,
     Note,
     Checklist,
+    Checkbox,
+    CheckboxChecked,
 }
 
 /// Icons drawn as vectors on a 16 × 16 grid, sharp at any size and zoom. In the spirit of the SF Symbols the macOS
@@ -260,6 +262,13 @@ public static class Icons
                 Line(thin, 8, 4, 14.5, 4);
                 Box(thin, 1.8, 9.6, 5.2, 13, 0.8);
                 Line(thin, 8, 11.3, 14.5, 11.3);
+                break;
+            case IconKind.Checkbox:
+                Box(thin, 2, 2, 14, 14, 3.5);
+                break;
+            case IconKind.CheckboxChecked:
+                context.DrawRectangle(brush, null, new RoundedRect(new Rect(P(1.5, 1.5), P(14.5, 14.5)), 3.5 * scale));
+                Path(null, cut, false, new(4.6, 8.3), new(7, 10.6), new(11.4, 5.6));
                 break;
             case IconKind.Trash:
                 Line(thin, 2.5, 4.5, 13.5, 4.5);

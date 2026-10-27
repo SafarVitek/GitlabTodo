@@ -1,0 +1,180 @@
+<!-- The app's look on top of Fluent: calm surfaces, soft buttons and fields, the same blue accent as the macOS app.
+     Colors the code draws with come from the App* resources here too, so both follow the light or dark theme. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="GitLabTodo.Ui.Look">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <Color x:Key="AppBackgroundColor">#FFFFFF</Color>
+          <Color x:Key="AppSidebarColor">#F5F5F7</Color>
+          <Color x:Key="AppSurfaceColor">#F3F3F5</Color>
+          <Color x:Key="AppRaisedColor">#FFFFFF</Color>
+          <Color x:Key="AppLineColor">#E5E5EA</Color>
+          <Color x:Key="AppTextColor">#1C1C1E</Color>
+          <SolidColorBrush x:Key="AppBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="AppHover" Color="#0B000000" />
+          <SolidColorBrush x:Key="AppPressed" Color="#16000000" />
+
+          <SolidColorBrush x:Key="ButtonBackground" Color="#F1F1F4" />
+          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#E8E8ED" />
+          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#DDDDE3" />
+          <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#F6F6F8" />
+          <SolidColorBrush x:Key="ButtonForeground" Color="#1C1C1E" />
+          <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#1C1C1E" />
+          <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#1C1C1E" />
+          <SolidColorBrush x:Key="ButtonBorderBrush" Color="#DCDCE2" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#CFCFD6" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#C6C6CE" />
+
+          <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#D9D9DF" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#C4C4CC" />
+          <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#0A84FF" />
+          <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#8E8E93" />
+          <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#8E8E93" />
+          <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#AEAEB2" />
+
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#F6F6F8" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#D9D9DF" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#C4C4CC" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#E0E0E6" />
+
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#E0E0E6" />
+          <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#F0F0F4" />
+          <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="FlyoutBorderThemeBrush" Color="#E0E0E6" />
+          <SolidColorBrush x:Key="ToolTipBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ToolTipForeground" Color="#1C1C1E" />
+          <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#E0E0E6" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+          <Color x:Key="AppBackgroundColor">#1F1F22</Color>
+          <Color x:Key="AppSidebarColor">#19191C</Color>
+          <Color x:Key="AppSurfaceColor">#28282C</Color>
+          <Color x:Key="AppRaisedColor">#2C2C30</Color>
+          <Color x:Key="AppLineColor">#323237</Color>
+          <Color x:Key="AppTextColor">#F2F2F4</Color>
+          <SolidColorBrush x:Key="AppBackground" Color="#1F1F22" />
+          <SolidColorBrush x:Key="AppHover" Color="#10FFFFFF" />
+          <SolidColorBrush x:Key="AppPressed" Color="#1CFFFFFF" />
+
+          <SolidColorBrush x:Key="ButtonBackground" Color="#2E2E33" />
+          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#38383E" />
+          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#424249" />
+          <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#252529" />
+          <SolidColorBrush x:Key="ButtonForeground" Color="#F2F2F4" />
+          <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#F2F2F4" />
+          <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#F2F2F4" />
+          <SolidColorBrush x:Key="ButtonBorderBrush" Color="#3B3B42" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#46464E" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#50505A" />
+
+          <SolidColorBrush x:Key="TextControlBackground" Color="#252529" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#28282D" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#252529" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#3B3B42" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#4A4A52" />
+          <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#0A84FF" />
+          <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#8E8E93" />
+          <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#8E8E93" />
+          <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#6E6E73" />
+
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="#252529" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#2C2C31" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#3B3B42" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#4A4A52" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#2C2C30" />
+          <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#3B3B42" />
+
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#2C2C30" />
+          <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#3B3B42" />
+          <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#38383E" />
+          <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#2C2C30" />
+          <SolidColorBrush x:Key="FlyoutBorderThemeBrush" Color="#3B3B42" />
+          <SolidColorBrush x:Key="ToolTipBackground" Color="#2C2C30" />
+          <SolidColorBrush x:Key="ToolTipForeground" Color="#F2F2F4" />
+          <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#3B3B42" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+      <CornerRadius x:Key="OverlayCornerRadius">10</CornerRadius>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource AppBackground}" />
+  </Style>
+
+  <Style Selector="Button">
+    <Setter Property="Padding" Value="12,5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- Icon buttons and quiet actions: no box until the pointer is over them. -->
+  <Style Selector="Button.subtle">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.subtle /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHover}" />
+  </Style>
+  <Style Selector="Button.subtle:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppPressed}" />
+  </Style>
+
+  <!-- Filled buttons with their own color keep it, a little lighter under the pointer. -->
+  <Style Selector="Button.filled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{Binding $parent[Button].Background}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.filled:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.88" />
+  </Style>
+  <Style Selector="Button.filled:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.78" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="9,6" />
+  </Style>
+  <!-- A field inside a card: no frame of its own. -->
+  <Style Selector="TextBox.bare /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TextBox.bare">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="2,4" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="32" />
+  </Style>
+
+  <Style Selector="MenuItem">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="10,5" />
+  </Style>
+
+  <Style Selector="ToolTip">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="8,5" />
+  </Style>
+</Styles>

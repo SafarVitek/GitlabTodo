@@ -139,13 +139,8 @@ private struct AccountEditor: View {
                 }
                 Section {
                     SecureField("Token", text: $token, prompt: Text(draft.isNew ? "glpat-…" : "Ponechat uložený"))
-                    HStack {
-                        Spacer()
-                        Button("Vytvořit token přes SSH", action: createTokenOverSSH)
-                            .disabled(sshTarget == nil || isWorking)
-                    }
                 } footer: {
-                    Text(tokenHint)
+                    Text("Personal Access Token musí mít scope api.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -174,15 +169,6 @@ private struct AccountEditor: View {
 
     private var apiURL: URL? {
         GitLabAccount.apiURL(from: draft.baseURL)
-    }
-
-    private var sshTarget: String? {
-        apiURL?.host().map { "git@\($0)" }
-    }
-
-    private var tokenHint: String {
-        "Personal Access Token se scope api, akce zakládají větve a MR. Tlačítko SSH ho vytvoří příkazem "
-            + "„ssh \(sshTarget ?? "git@…") personal_access_token“ pomocí tvého SSH klíče (platnost 365 dní)."
     }
 
     private var effectiveToken: String {
@@ -240,19 +226,6 @@ private struct AccountEditor: View {
                     message += ", reviewer @\(reviewer) existuje"
                 }
                 status = .success(message)
-            } catch {
-                status = .failure(error.localizedDescription)
-            }
-        }
-    }
-
-    private func createTokenOverSSH() {
-        guard let sshTarget else { return }
-        status = .working("Vytvářím token přes SSH…")
-        Task {
-            do {
-                token = try await SSHTokenCreator.create(target: sshTarget)
-                status = .success("Token vytvořen, nezapomeň uložit")
             } catch {
                 status = .failure(error.localizedDescription)
             }

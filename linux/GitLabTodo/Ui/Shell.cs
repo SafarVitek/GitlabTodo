@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using GitLabTodo.Core;
 using GitLabTodo.Platform;
@@ -104,6 +105,14 @@ public sealed class Shell
         }
         settings.Activate();
     }
+
+    /// `system` follows the desktop, which Avalonia reads from the freedesktop portal.
+    public static void ApplyTheme(string theme) => Application.Current!.RequestedThemeVariant = theme switch
+    {
+        "light" => ThemeVariant.Light,
+        "dark" => ThemeVariant.Dark,
+        _ => ThemeVariant.Default,
+    };
 
     public void Quit()
     {

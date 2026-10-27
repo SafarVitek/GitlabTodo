@@ -18,7 +18,7 @@ public sealed class OrderList : Panel
 
     private readonly AppState state;
     private readonly ScrollViewer scroller = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-    private readonly StackPanel rows = new() { Margin = new Thickness(8, 6) };
+    private readonly StackPanel rows = new() { Margin = new Thickness(10, 8), Spacing = 1 };
     private readonly Canvas overlay = new() { IsHitTestVisible = false };
     private readonly Border insertion = new() { Height = 2, Background = Paint.AccentBrush(), CornerRadius = new CornerRadius(1), IsVisible = false };
     private readonly Control placeholder = Views.Placeholder(IconKind.CheckCircle, "Nic tu není");
@@ -253,7 +253,7 @@ public sealed class OrderList : Panel
             stage.Margin = new Thickness(0, 1, 0, 0);
             grid.Children.Add(stage);
             var text = new StackPanel { Spacing = 3 };
-            text.Children.Add(Views.Label(item.Title, 13.5));
+            text.Children.Add(Views.Label(item.Title, 14));
             text.Children.Add(Views.ItemMeta(item));
             Grid.SetColumn(text, 1);
             grid.Children.Add(text);
@@ -275,9 +275,9 @@ public sealed class OrderList : Panel
             card = new Border
             {
                 Child = grid,
-                Padding = new Thickness(10, 7),
-                CornerRadius = new CornerRadius(7),
-                MinHeight = 44,
+                Padding = new Thickness(12, 8),
+                CornerRadius = new CornerRadius(8),
+                MinHeight = 50,
                 Opacity = item.IsWaiting ? 0.7 : 1,
                 Background = Brushes.Transparent,
             };
@@ -314,7 +314,7 @@ public sealed class OrderList : Panel
 
         private void Update()
         {
-            card.Background = isSelected ? Paint.AccentBrush(0.16) : isHovered ? Paint.Primary(0.04) : Brushes.Transparent;
+            card.Background = isSelected ? Paint.AccentBrush(Paint.IsDark ? 0.26 : 0.13) : isHovered ? Paint.Primary(0.045) : Brushes.Transparent;
             if (action is not null && Item.NextStep is { } step)
             {
                 action.IsVisible = step.Action.IsProminent() || isHovered || isSelected;

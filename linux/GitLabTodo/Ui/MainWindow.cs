@@ -28,10 +28,7 @@ public sealed class MainWindow : Window
     private bool showsInspector = true;
     private string? selection;
     private int focusSerial;
-    private bool isUpdatingSidebar;
     private bool isUpdatePending;
-    /// Projects and counts the sidebar shows, to rebuild it only when they change.
-    private string? sidebarContent;
     private Parts parts = null!;
 
     public MainWindow(AppState state, Shell shell)
@@ -59,13 +56,13 @@ public sealed class MainWindow : Window
 
     /// The controls of one build of the window.
     private sealed record Parts(
-        ListBox Sidebar,
+        Sidebar Sidebar,
         TextBlock Title,
         TextBlock Subtitle,
+        Segmented Mode,
         Segmented Kind,
         StackPanel ZoomControls,
         TextBlock ZoomLabel,
-        Spinner Spinner,
         Button Refresh,
         StackPanel Errors,
         Border ErrorBanner,
@@ -76,7 +73,6 @@ public sealed class MainWindow : Window
 
     private void BuildContent()
     {
-        sidebarContent = null;
         var orderList = new OrderList(state);
         orderList.Selected += Select;
         var timeline = new TimelineView(state);
@@ -106,25 +102,24 @@ public sealed class MainWindow : Window
         var zoomControls = Views.Row(0,
             Views.IconButton(IconKind.ZoomOut, "Oddálit (Ctrl −)", () => ZoomBy(-0.1)),
             zoomLabel,
-            Views.IconButton(IconKind.ZoomIn, "Přiblížit (Ctrl +)", () => ZoomBy(0.1)));
-        var spinner = new Spinner();
+            Views.IconButton(IconKind.ZoomIn, "Přiblížit (Ctrl +)", () => ZoomBy(0.1)),
+            Separator());
         var refresh = Views.IconButton(IconKind.Refresh, "Obnovit (F5)", () => _ = state.Refresh());
-        var title = new TextBlock { FontSize = 17, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-        var subtitle = new TextBlock { FontSize = 12, Foreground = Paint.Secondary, TextTrimming = TextTrimming.CharacterEllipsis };
-        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+        var title = new TextBlock { FontSize = 20, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        var subtitle = new TextBlock { FontSize = 12.5, Foreground = Paint.Secondary, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
         titles.Children.AddRange([title, subtitle]);
 
         var inspectorPane = new Border
         {
             Child = inspector,
-            Width = 330,
-            BorderBrush = Paint.Primary(0.08),
+            Width = 340,
+            BorderBrush = Paint.Line,
             BorderThickness = new Thickness(1, 0, 0, 0),
             IsVisible = showsInspector,
         };
-        var end = Views.Row(2,
+        var end = Views.Row(4,
             zoomControls,
-            spinner,
             refresh,
             Views.IconButton(IconKind.Gear, "Nastavení (Ctrl ,)", shell.ShowSettings),
             Views.IconButton(IconKind.Sidebar, "Detail", () =>
@@ -133,14 +128,30 @@ public sealed class MainWindow : Window
                 inspectorPane.IsVisible = showsInspector;
             }));
         var switches = Views.Row(8, mode, kind);
-        switches.Margin = new Thickness(0, 0, 10, 0);
-        var toolbar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(16, 10, 8, 10) };
+        switches.Margin = new Thickness(0, 0, 12, 0);
+        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
         Grid.SetColumn(switches, 1);
         Grid.SetColumn(end, 2);
-        toolbar.Children.AddRange([titles, switches, end]);
+        bar.Children.AddRange([titles, switches, end]);
+        var toolbar = new Border
+        {
+            Child = bar,
+            Padding = new Thickness(22, 12, 12, 12),
+            MinHeight = 66,
+            BorderBrush = Paint.Line,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
 
         var errors = new StackPanel { Spacing = 4 };
-        var errorBanner = new Border { Child = errors, Background = Paint.Waiting(0.08), Padding = new Thickness(14, 8), IsVisible = false };
+        var errorBanner = new Border
+        {
+            Child = errors,
+            Background = Paint.Waiting(0.1),
+            BorderBrush = Paint.Waiting(0.25),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(22, 8),
+            IsVisible = false,
+        };
         var content = new Panel();
         content.Children.AddRange([orderList, timeline]);
         var center = new DockPanel();
@@ -148,30 +159,18 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(errorBanner, Dock.Top);
         center.Children.AddRange([toolbar, errorBanner, content]);
 
-        var sidebar = new ListBox { Background = Brushes.Transparent, Padding = new Thickness(6, 8) };
-        sidebar.SelectionChanged += (_, _) =>
+        var sidebar = new Sidebar { Width = 232 };
+        sidebar.Picked += tag =>
         {
-            if (!isUpdatingSidebar && sidebar.SelectedItem is ListBoxItem { Tag: Filter picked })
-            {
-                filter = picked;
-                // Not right away: the list is still in the middle of changing its selection.
-                ScheduleUpdate();
-            }
-        };
-        var sidebarPane = new Border
-        {
-            Child = sidebar,
-            Width = 220,
-            Background = Paint.Primary(0.035),
-            BorderBrush = Paint.Primary(0.08),
-            BorderThickness = new Thickness(0, 0, 1, 0),
+            filter = (Filter)tag;
+            ScheduleUpdate();
         };
         var layout = new DockPanel();
-        DockPanel.SetDock(sidebarPane, Dock.Left);
+        DockPanel.SetDock(sidebar, Dock.Left);
         DockPanel.SetDock(inspectorPane, Dock.Right);
-        layout.Children.AddRange([sidebarPane, inspectorPane, center]);
+        layout.Children.AddRange([sidebar, inspectorPane, center]);
         Content = layout;
-        parts = new Parts(sidebar, title, subtitle, kind, zoomControls, zoomLabel, spinner, refresh, errors, errorBanner, orderList, timeline, inspector, inspectorPane);
+        parts = new Parts(sidebar, title, subtitle, mode, kind, zoomControls, zoomLabel, refresh, errors, errorBanner, orderList, timeline, inspector, inspectorPane);
     }
 
     private List<TodoItem> FilteredItems
@@ -223,16 +222,18 @@ public sealed class MainWindow : Window
         {
             summary.Add($"{unplaced} nezařazených");
         }
-        summary.Add(state.LastRefresh is { } refreshed ? $"aktualizováno {Views.Relative(refreshed)}" : "zatím neaktualizováno");
         parts.Subtitle.Text = string.Join(" · ", summary);
         ToolTip.SetTip(parts.Subtitle, parts.Subtitle.Text);
 
+        parts.Mode.Select(isTimeline ? 1 : 0);
         // An overview across projects, the sidebar and kind filters do not apply.
         parts.Kind.IsEnabled = !isTimeline;
         ToolTip.SetTip(parts.Kind, isTimeline ? "Timeline ukazuje všechno napříč projekty" : "Zobrazit issue, merge requesty nebo obojí");
         parts.ZoomControls.IsVisible = isTimeline;
         parts.ZoomLabel.Text = $"{Math.Round(state.TimelineZoom * 100)} %";
-        parts.Spinner.IsVisible = state.IsRefreshing;
+        parts.Sidebar.ShowStatus(
+            state.IsRefreshing ? "Obnovuji…" : state.LastRefresh is { } refreshed ? $"Aktualizováno {Views.Relative(refreshed)}" : "Zatím neaktualizováno",
+            state.IsRefreshing);
         parts.Refresh.IsEnabled = !state.IsRefreshing;
 
         var failing = state.Accounts.Where(a => state.AccountErrors.ContainsKey(a.Id)).ToList();
@@ -261,67 +262,27 @@ public sealed class MainWindow : Window
     private void UpdateSidebar()
     {
         var tabs = ProjectTab.Tabs(state.Items);
-        var waitingCount = state.Items.Count(i => i.IsWaiting);
-        var content = string.Join("\n", tabs.Select(t => $"{t.Key} {t.AccountName} {t.Name} {t.Count} {t.Color}").Prepend($"{state.Items.Count} {waitingCount}"));
-        isUpdatingSidebar = true;
-        var sidebar = parts.Sidebar;
-        // Replacing the entries on every refresh would also drop the hover and break a click in progress.
-        if (content != sidebarContent)
-        {
-            sidebarContent = content;
-            sidebar.Items.Clear();
-            foreach (var entry in SidebarEntries(tabs, waitingCount))
-            {
-                sidebar.Items.Add(entry);
-            }
-        }
-        var entries = sidebar.Items.OfType<ListBoxItem>().ToList();
-        sidebar.SelectedItem = entries.FirstOrDefault(e => Equals(e.Tag, filter));
-        if (sidebar.SelectedItem is null)
-        {
-            // The project is gone, e.g. its last item got done.
-            filter = new AllItems();
-            sidebar.SelectedItem = entries[0];
-        }
-        isUpdatingSidebar = false;
-    }
-
-    private List<ListBoxItem> SidebarEntries(List<ProjectTab> tabs, int waitingCount)
-    {
         var accountNames = tabs.Select(t => t.AccountName).Distinct().Order(StringComparer.Ordinal).ToList();
-        var entries = new List<ListBoxItem>
+        var items = new List<SidebarItem>
         {
-            Entry(new AllItems(), new Icon(IconKind.Tray, Paint.AccentBrush(), 15), "Vše", state.Items.Count),
-            Entry(new WaitingItems(), new Icon(IconKind.Pause, Paint.Waiting(), 15), "Čeká", waitingCount),
+            new(new AllItems(), "Vše", () => new Icon(IconKind.Tray, Paint.AccentBrush(), 16), state.Items.Count),
+            new(new WaitingItems(), "Čeká", () => new Icon(IconKind.Pause, Paint.Waiting(), 16), state.Items.Count(i => i.IsWaiting)),
         };
         foreach (var accountName in accountNames)
         {
-            entries.Add(new ListBoxItem
-            {
-                Content = Views.Label(accountNames.Count > 1 ? accountName : "Projekty", 11.5, Paint.Secondary, FontWeight.SemiBold),
-                IsEnabled = false,
-                Margin = new Thickness(0, 10, 0, 0),
-                MinHeight = 24,
-            });
-            foreach (var tab in tabs.Where(t => t.AccountName == accountName))
-            {
-                var dot = new Ellipse { Width = 9, Height = 9, Fill = Paint.Project(tab.Color), Margin = new Thickness(3, 0) };
-                entries.Add(Entry(new ProjectItems(tab.Key), dot, tab.Name, tab.Count));
-            }
+            items.Add(new SidebarItem(null, accountNames.Count > 1 ? accountName : "Projekty"));
+            items.AddRange(tabs.Where(t => t.AccountName == accountName).Select(tab =>
+                new SidebarItem(new ProjectItems(tab.Key), tab.Name, () => new Ellipse { Width = 9, Height = 9, Fill = Paint.Project(tab.Color) }, tab.Count)));
         }
-        return entries;
+        if (!items.Any(i => Equals(i.Tag, filter)))
+        {
+            // The project is gone, e.g. its last item got done.
+            filter = new AllItems();
+        }
+        parts.Sidebar.Show(items, filter);
     }
 
-    private static ListBoxItem Entry(Filter tag, Control icon, string name, int count)
-    {
-        var row = new DockPanel();
-        var badge = Views.Label(count.ToString(), 12, Paint.Secondary);
-        DockPanel.SetDock(icon, Dock.Left);
-        DockPanel.SetDock(badge, Dock.Right);
-        icon.Margin = new Thickness(0, 0, 8, 0);
-        row.Children.AddRange([icon, badge, Views.Label(name, 13)]);
-        return new ListBoxItem { Content = row, Tag = tag, Padding = new Thickness(10, 6), CornerRadius = new CornerRadius(6), MinHeight = 32 };
-    }
+    private static Border Separator() => new() { Width = 1, Height = 20, Background = Paint.Line, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center };
 
     private void Select(string id)
     {
