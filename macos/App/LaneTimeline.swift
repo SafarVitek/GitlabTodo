@@ -211,6 +211,66 @@ struct TimelineMetrics: Equatable {
     }
 }
 
+/// Scrolls the timeline while something is dragged near or past the edge of the visible area. A system drag
+/// session delivers no mouse events to the app, so the pointer is read from the window 60 times a second instead.
+@MainActor
+@Observable
+final class TimelineAutoScroller {
+    private static let edge: CGFloat = 56
+    private static let maxStep: CGFloat = 16
+
+    /// The visible part of the timeline in window coordinates, top-left origin.
+    @ObservationIgnored var viewport = CGRect.zero
+    @ObservationIgnored var visible = CGRect.zero
+    @ObservationIgnored var contentSize = CGSize.zero
+    @ObservationIgnored var scrollTo: ((CGPoint) -> Void)?
+    @ObservationIgnored private var timer: Timer?
+
+    /// Starts following the pointer; stops on its own when the mouse button is released.
+    func begin() {
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        // Common modes keep it running inside the drag session's event tracking loop.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    private func tick() {
+        guard NSEvent.pressedMouseButtons & 1 != 0, let window = NSApp.keyWindow else {
+            timer?.invalidate()
+            timer = nil
+            return
+        }
+        let point = window.mouseLocationOutsideOfEventStream
+        let local = CGPoint(x: point.x - viewport.minX, y: window.frame.height - point.y - viewport.minY)
+        let dx = local.y >= 0 && local.y <= viewport.height ? speed(local.x, length: viewport.width) : 0
+        let dy = local.x >= 0 && local.x <= viewport.width ? speed(local.y, length: viewport.height) : 0
+        guard dx != 0 || dy != 0 else { return }
+        let origin = CGPoint(
+            x: min(max(0, visible.minX + dx), max(0, contentSize.width - visible.width)),
+            y: min(max(0, visible.minY + dy), max(0, contentSize.height - visible.height)))
+        if origin != visible.origin {
+            visible.origin = origin
+            scrollTo?(origin)
+        }
+    }
+
+    /// Faster the closer to the edge, full speed at it and beyond.
+    private func speed(_ position: CGFloat, length: CGFloat) -> CGFloat {
+        if position < Self.edge {
+            let closeness = min(1, (Self.edge - position) / Self.edge)
+            return -Self.maxStep * closeness * closeness
+        }
+        if position > length - Self.edge {
+            let closeness = min(1, (position - (length - Self.edge)) / Self.edge)
+            return Self.maxStep * closeness * closeness
+        }
+        return 0
+    }
+}
+
 /// Horizontal timeline: a lane per project, items as equally long steps, arrows where one waits on another.
 struct LaneTimeline: View {
     static let zoomKey = "timelineZoom"
@@ -226,6 +286,7 @@ struct LaneTimeline: View {
     @State private var pinchStart: Double?
     @State private var position = ScrollPosition()
     @State private var visible = CGRect.zero
+    @State private var scroller = TimelineAutoScroller()
     @Binding var selection: String?
 
     var body: some View {
@@ -235,10 +296,19 @@ struct LaneTimeline: View {
         let metrics = TimelineMetrics(zoom: zoom)
         ScrollView([.horizontal, .vertical]) {
             TimelineContent(schedule: schedule, steps: steps, metrics: metrics, selection: $selection)
+                .environment(scroller)
         }
         .scrollPosition($position)
-        .onScrollGeometryChange(for: CGRect.self, of: { $0.visibleRect }) { _, rect in
-            visible = rect
+        .onScrollGeometryChange(for: ScrollGeometry.self, of: { $0 }) { _, geometry in
+            visible = geometry.visibleRect
+            scroller.visible = geometry.visibleRect
+            scroller.contentSize = geometry.contentSize
+        }
+        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { frame in
+            scroller.viewport = frame
+        }
+        .onAppear {
+            scroller.scrollTo = { position.scrollTo(point: $0) }
         }
         .simultaneousGesture(
             MagnifyGesture()
@@ -351,6 +421,7 @@ private struct LinkHandle: View {
     }
 
     @State private var isHovered = false
+    @Environment(TimelineAutoScroller.self) private var scroller
     let metrics: TimelineMetrics
     let onChanged: (CGPoint) -> Void
     let onEnded: (CGPoint) -> Void
@@ -367,7 +438,10 @@ private struct LinkHandle: View {
             .help("Přidat vazbu")
             .gesture(
                 DragGesture(minimumDistance: 2, coordinateSpace: .named(TimelineContent.space))
-                    .onChanged { onChanged($0.location) }
+                    .onChanged {
+                        scroller.begin()
+                        onChanged($0.location)
+                    }
                     .onEnded { onEnded($0.location) })
     }
 }
@@ -564,6 +638,7 @@ private struct DependencyArrow: View {
 /// The lane's background takes drops onto its empty steps: the block moves there, with a delay if needed.
 private struct LaneBackground: View {
     @Environment(AppModel.self) private var model
+    @Environment(TimelineAutoScroller.self) private var scroller
     @State private var isTargeted = false
     let lane: TimelineLane
     let index: Int
@@ -581,7 +656,12 @@ private struct LaneBackground: View {
                 // The location is relative to the background, which starts a little left of the lane.
                 model.placeInTimeline(dragged, atStep: metrics.step(at: location.x + metrics.padding - inset), laneIDs: laneIDs)
                 return true
-            } isTargeted: { isTargeted = $0 }
+            } isTargeted: {
+                isTargeted = $0
+                if $0 {
+                    scroller.begin()
+                }
+            }
             .offset(x: metrics.padding - inset, y: metrics.y(index) - inset)
     }
 }
@@ -666,6 +746,7 @@ private struct BlockView: View, Equatable {
     private static let logger = Logger(subsystem: "local.gitlabtodo", category: "timeline")
 
     @Environment(AppModel.self) private var model
+    @Environment(TimelineAutoScroller.self) private var scroller
     @State private var isTargeted = false
     let block: TimelineBlock
     let laneIDs: [String]
@@ -743,6 +824,8 @@ private struct BlockView: View, Equatable {
                 onSelect()
             }
         })
+        // Starts scrolling the timeline when the drag gets near its edge.
+        .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in scroller.begin() })
         .draggable(block.id)
         .dropDestination(for: String.self) { ids, _ in
             guard let dragged = ids.first, dragged != block.id else { return false }
@@ -752,7 +835,12 @@ private struct BlockView: View, Equatable {
                 model.linkInTimeline(dragged, onto: block.id)
             }
             return true
-        } isTargeted: { isTargeted = $0 }
+        } isTargeted: {
+            isTargeted = $0
+            if $0 {
+                scroller.begin()
+            }
+        }
         .contextMenu {
             Button("O krok později") { model.delay(block.id, by: 1) }
             Button("O krok dřív") { model.delay(block.id, by: -1) }
