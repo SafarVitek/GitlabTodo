@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using GitLabTodo.Core;
 
 namespace GitLabTodo.Ui;
@@ -207,7 +208,8 @@ public sealed class WorkItemSearch : StackPanel
             if (e.GetCurrentPoint(row).Properties.IsLeftButtonPressed)
             {
                 e.Handled = true;
-                onPick();
+                // After the press is handled: picking clears the list this row is in.
+                Dispatcher.UIThread.Post(onPick);
             }
         };
         return row;

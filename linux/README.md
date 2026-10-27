@@ -42,6 +42,7 @@ nix develop                                   # .NET 10 SDK
 dotnet run --project linux/GitLabTodo         # aplikace
 dotnet run --project linux/GitLabTodo -- --preview   # s ukázkovými daty, nic neukládá
 dotnet run --project linux/Tests              # testy logiky
+dotnet run --project linux/UiTests            # UI proklikané bez displeje
 nix build .#gitlab-todo                       # balíček
 ```
 
@@ -62,4 +63,5 @@ Runtime balíčky .NET se vynechávají, ty dodává SDK z nixpkgs.
   se dá testovat bez displeje.
 - `GitLabTodo/`: Avalonia aplikace. Timeline je kreslená vektorově při každém zoomu, takže zůstává ostrá.
 - `Tests/`: testy logiky jako konzolový program, stejné scénáře jako testy macOS verze.
+- `UiTests/`: aplikace na ukázkových datech proklikaná simulovanou myší a klávesnicí bez displeje.
 - `package.nix`: balíček pro nixpkgs, použitý z `flake.nix` v kořeni.

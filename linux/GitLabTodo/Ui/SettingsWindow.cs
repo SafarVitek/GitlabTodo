@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using GitLabTodo.Core;
 using GitLabTodo.Platform;
 
@@ -27,8 +28,8 @@ public sealed class SettingsWindow : Window
         BuildContent();
         // Colors are taken when controls are made, a new theme needs new ones.
         ActualThemeVariantChanged += (_, _) => BuildContent();
-        state.Changed += Update;
-        Closed += (_, _) => state.Changed -= Update;
+        state.Changed += ScheduleUpdate;
+        Closed += (_, _) => state.Changed -= ScheduleUpdate;
     }
 
     private void BuildContent()
@@ -97,6 +98,9 @@ public sealed class SettingsWindow : Window
         grid.Children.AddRange([text, control]);
         return grid;
     }
+
+    /// After the change that caused it is done, e.g. a pick in the interval list.
+    private void ScheduleUpdate() => Dispatcher.UIThread.Post(Update);
 
     private void Update()
     {

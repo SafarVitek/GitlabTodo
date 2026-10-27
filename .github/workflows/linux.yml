@@ -24,6 +24,9 @@ jobs:
       - name: Logic tests
         run: nix develop --command dotnet run --project linux/Tests
 
+      - name: UI clicked through without a display
+        run: nix develop --command dotnet run --project linux/UiTests
+
       - name: Nix package
         run: nix build .#gitlab-todo --print-build-logs
 

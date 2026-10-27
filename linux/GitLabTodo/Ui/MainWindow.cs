@@ -30,6 +30,8 @@ public sealed class MainWindow : Window
     private int focusSerial;
     private bool isUpdatingSidebar;
     private bool isUpdatePending;
+    /// Projects and counts the sidebar shows, to rebuild it only when they change.
+    private string? sidebarContent;
     private Parts parts = null!;
 
     public MainWindow(AppState state, Shell shell)
@@ -74,6 +76,7 @@ public sealed class MainWindow : Window
 
     private void BuildContent()
     {
+        sidebarContent = null;
         var orderList = new OrderList(state);
         orderList.Selected += Select;
         var timeline = new TimelineView(state);
@@ -151,7 +154,8 @@ public sealed class MainWindow : Window
             if (!isUpdatingSidebar && sidebar.SelectedItem is ListBoxItem { Tag: Filter picked })
             {
                 filter = picked;
-                Update();
+                // Not right away: the list is still in the middle of changing its selection.
+                ScheduleUpdate();
             }
         };
         var sidebarPane = new Border
@@ -256,13 +260,39 @@ public sealed class MainWindow : Window
 
     private void UpdateSidebar()
     {
-        isUpdatingSidebar = true;
         var tabs = ProjectTab.Tabs(state.Items);
+        var waitingCount = state.Items.Count(i => i.IsWaiting);
+        var content = string.Join("\n", tabs.Select(t => $"{t.Key} {t.AccountName} {t.Name} {t.Count} {t.Color}").Prepend($"{state.Items.Count} {waitingCount}"));
+        isUpdatingSidebar = true;
+        var sidebar = parts.Sidebar;
+        // Replacing the entries on every refresh would also drop the hover and break a click in progress.
+        if (content != sidebarContent)
+        {
+            sidebarContent = content;
+            sidebar.Items.Clear();
+            foreach (var entry in SidebarEntries(tabs, waitingCount))
+            {
+                sidebar.Items.Add(entry);
+            }
+        }
+        var entries = sidebar.Items.OfType<ListBoxItem>().ToList();
+        sidebar.SelectedItem = entries.FirstOrDefault(e => Equals(e.Tag, filter));
+        if (sidebar.SelectedItem is null)
+        {
+            // The project is gone, e.g. its last item got done.
+            filter = new AllItems();
+            sidebar.SelectedItem = entries[0];
+        }
+        isUpdatingSidebar = false;
+    }
+
+    private List<ListBoxItem> SidebarEntries(List<ProjectTab> tabs, int waitingCount)
+    {
         var accountNames = tabs.Select(t => t.AccountName).Distinct().Order(StringComparer.Ordinal).ToList();
         var entries = new List<ListBoxItem>
         {
             Entry(new AllItems(), new Icon(IconKind.Tray, Paint.AccentBrush(), 15), "Vše", state.Items.Count),
-            Entry(new WaitingItems(), new Icon(IconKind.Pause, Paint.Waiting(), 15), "Čeká", state.Items.Count(i => i.IsWaiting)),
+            Entry(new WaitingItems(), new Icon(IconKind.Pause, Paint.Waiting(), 15), "Čeká", waitingCount),
         };
         foreach (var accountName in accountNames)
         {
@@ -279,20 +309,7 @@ public sealed class MainWindow : Window
                 entries.Add(Entry(new ProjectItems(tab.Key), dot, tab.Name, tab.Count));
             }
         }
-        var sidebar = parts.Sidebar;
-        sidebar.Items.Clear();
-        foreach (var entry in entries)
-        {
-            sidebar.Items.Add(entry);
-        }
-        sidebar.SelectedItem = entries.FirstOrDefault(e => Equals(e.Tag, filter));
-        if (sidebar.SelectedItem is null)
-        {
-            // The project is gone, e.g. its last item got done.
-            filter = new AllItems();
-            sidebar.SelectedItem = entries[0];
-        }
-        isUpdatingSidebar = false;
+        return entries;
     }
 
     private static ListBoxItem Entry(Filter tag, Control icon, string name, int count)
