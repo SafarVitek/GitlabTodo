@@ -1,0 +1,35 @@
+name: Linux
+
+on:
+  push:
+    branches: [main]
+    paths: ["linux/**", "flake.nix", "flake.lock", ".github/workflows/linux.yml"]
+  pull_request:
+    paths: ["linux/**", "flake.nix", "flake.lock", ".github/workflows/linux.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    env:
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+
+      - name: Logic tests
+        run: nix develop --command dotnet run --project linux/Tests
+
+      - name: Nix package
+        run: nix build .#gitlab-todo --print-build-logs
+
+      - name: Starts under a virtual display
+        # Still running after 20 s, so it came up without crashing.
+        run: |
+          set +e
+          nix shell nixpkgs#xvfb-run --command xvfb-run -a timeout 20 ./result/bin/gitlab-todo --preview
+          test $? -eq 124

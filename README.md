@@ -7,13 +7,13 @@ a GitLaby. Pořadí, vazby a odklady se drží jen u tebe na počítači, do Git
 
 Aplikace je ve dvou verzích se stejnými funkcemi a stejným formátem dat:
 
-| | macOS | Linux (a další systémy) |
+| | macOS | Linux |
 |---|---|---|
-| Složka | [`macos/`](macos) | `linux/` (připravuje se) |
+| Složka | [`macos/`](macos) | [`linux/`](linux) |
 | Technologie | SwiftUI, WidgetKit | Avalonia (.NET) |
 | Widget na ploše | ano | ne |
 | Kde žije | ikona v menu baru + okno | ikona v systémové liště + okno |
-| Instalace | ke stažení z [Releases](../../releases) | `nix profile install` |
+| Instalace | ke stažení z [Releases](../../releases) | Nix flake |
 
 ## Co umí
 
@@ -46,7 +46,19 @@ sestavuje podle [`macos/README.md`](macos/README.md).
 
 ### Linux
 
-Linuxová verze se připravuje, bude se instalovat přes Nix.
+Přes Nix s flakes:
+
+```sh
+nix profile install github:SafarVitek/GitlabTodo
+```
+
+Jen vyzkoušet bez instalace jde `nix run github:SafarVitek/GitlabTodo`, s ukázkovými daty
+`nix run github:SafarVitek/GitlabTodo -- --preview`. Na NixOS nebo v Home Manageru přidej flake do inputs
+a balíček `packages.${system}.default` (nebo overlay `overlays.default`) do svých balíčků.
+
+Aplikace se spouští jako „GitLab Todo“ z menu aplikací nebo příkazem `gitlab-todo`. Po zavření okna
+běží dál v systémové liště, na GNOME k tomu potřebuješ rozšíření AppIndicator. Víc v
+[`linux/README.md`](linux/README.md).
 
 ## Přístup ke GitLabu
 
