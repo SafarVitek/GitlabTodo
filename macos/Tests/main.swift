@@ -118,7 +118,7 @@ MainActor.assumeIsolated {
     check(!(dm.items.first { $0.shortReference == "docs#3" }!.isWaiting), "link removed")
     check(dm.dependents(of: did("backend#12")).map(\.shortReference) == ["backend#21"], "dependents of an item")
     let legacyDelays = try! JSONDecoder().decode(Plan.self, from: Data(#"{"order":["a"]}"#.utf8))
-    check(legacyDelays.delays.isEmpty && legacyDelays.tracked.isEmpty, "older plans load without delays")
+    check(legacyDelays.delays.isEmpty && legacyDelays.tracked.isEmpty && legacyDelays.notes.isEmpty, "older plans load without delays and notes")
 
     check(LaneTimeline.zoom(1.0, by: 0.1) == 1.1 && LaneTimeline.zoom(0.3, by: -0.1) == 0.3 && LaneTimeline.zoom(1.47, by: 0.1) == 1.5 && LaneTimeline.zoom(0.83, by: -0.1) == 0.7, "zoom steps by 10 % within its range")
 
@@ -136,6 +136,29 @@ MainActor.assumeIsolated {
     stale[sso].wait = Wait(itemIDs: [stale.first { $0.shortReference == "backend#33" }!.id])
     let staleSchedule = TimelineSchedule.build(items: stale, external: [], positions: Dictionary(uniqueKeysWithValues: stale.enumerated().map { ($1.id, $0) }))
     check(staleSchedule.lanes.first { $0.name == "backend" }!.blocks.prefix(2).compactMap(\.item?.shortReference) == ["backend#33", "backend#12"], "timeline straightens stored order")
+
+    // Notes: free text with GitLab-style tasks, kept locally per item.
+    let note = ItemNote(text: "Zápis\n- [ ] první\n  * [x] druhý\n[ ] třetí\n- [ ]\n- bod\n[x]neúkol", updatedAt: .now)
+    check(note.tasks.map(\.text) == ["první", "druhý", "třetí", ""] && note.tasks.map(\.isDone) == [false, true, false, false], "tasks parsed: \(note.tasks.map(\.text))")
+    check(note.openTasks.map(\.line) == [1, 3, 4], "open tasks")
+    check(note.toggling(line: 1).text == "Zápis\n- [x] první\n  * [x] druhý\n[ ] třetí\n- [ ]\n- bod\n[x]neúkol", "tick a task off")
+    check(note.toggling(line: 2).tasks[1].isDone == false && note.toggling(line: 5) == note, "tick back on, other lines untouched")
+    let nm = AppModel(preview: .preview)
+    let nid = { (ref: String) in nm.items.first { $0.shortReference == ref }!.id }
+    check(nm.items.first { $0.shortReference == "backend#33" }?.note?.openTasks.count == 2, "preview note on the issue with its MR")
+    nm.setNote("Meeting\n- [ ] zavolat", forItemID: nid("infra#5"))
+    check(nm.items.first { $0.shortReference == "infra#5" }?.note?.tasks.map(\.text) == ["zavolat"], "note saved on the item")
+    nm.toggleTask(line: 1, forItemID: nid("infra#5"))
+    check(nm.items.first { $0.shortReference == "infra#5" }?.note?.openTasks.isEmpty == true, "task ticked off")
+    nm.setNote("  \n", forItemID: nid("infra#5"))
+    check(nm.items.first { $0.shortReference == "infra#5" }?.note == nil, "an empty note is removed")
+    let mergeRequestID = nm.items.first { $0.shortReference == "backend#33" }!.mergeRequests[0].id
+    nm.setNote("z MR", forItemID: mergeRequestID)
+    check(nm.items.first { $0.shortReference == "backend#33" }?.note?.text.hasSuffix("\n\nz MR") == true, "a note on a grouped MR joins its issue")
+    nm.requestFocus(on: nid("docs#3"), editsNote: true)
+    check(nm.takeNoteToEdit(nid("docs#3")) && !nm.takeNoteToEdit(nid("docs#3")), "widget click opens the note once")
+    let notedPlan = try! JSONDecoder().decode(Plan.self, from: Data(#"{"order":[],"notes":{"a":{"text":"x","updatedAt":0}}}"#.utf8))
+    check(notedPlan.notes["a"]?.text == "x", "notes load from the plan")
 
     // Grouping: an MR closing an issue, or named after it, joins the issue.
     let account = UUID()

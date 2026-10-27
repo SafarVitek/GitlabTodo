@@ -13,6 +13,8 @@ struct Plan: Codable, Sendable {
     var tracked: [ExternalBlocker] = []
     /// Empty timeline steps the user put before an item, to start it later.
     var delays: [String: Int] = [:]
+    /// The user's notes on items, kept after the item is done.
+    var notes: [String: ItemNote] = [:]
 }
 
 extension Plan {
@@ -24,6 +26,7 @@ extension Plan {
         released = try container.decodeIfPresent([String: Release].self, forKey: .released) ?? [:]
         tracked = try container.decodeIfPresent([ExternalBlocker].self, forKey: .tracked) ?? []
         delays = try container.decodeIfPresent([String: Int].self, forKey: .delays) ?? [:]
+        notes = try container.decodeIfPresent([String: ItemNote].self, forKey: .notes) ?? [:]
     }
 }
 
@@ -66,6 +69,8 @@ final class AppModel {
     /// Place of each item, own or not, in the work order.
     private(set) var orderPositions: [String: Int] = [:]
     private(set) var timelineDelays: [String: Int] = [:]
+    /// An item whose notes open for writing once it is shown, e.g. after a click in the widget.
+    private(set) var noteToEdit: String?
 
     @ObservationIgnored private let isPreview: Bool
     @ObservationIgnored private var plan: Plan
@@ -106,7 +111,8 @@ final class AppModel {
         plan = Plan(
             order: snapshot.items.filter(\.isPlaced).map(\.id),
             waits: Dictionary(snapshot.items.compactMap { item in item.wait.map { (item.id, $0) } }, uniquingKeysWith: { first, _ in first }),
-            released: Dictionary(snapshot.items.compactMap { item in item.releasedBy.map { (item.id, Release(date: .now, finished: [$0])) } }, uniquingKeysWith: { first, _ in first }))
+            released: Dictionary(snapshot.items.compactMap { item in item.releasedBy.map { (item.id, Release(date: .now, finished: [$0])) } }, uniquingKeysWith: { first, _ in first }),
+            notes: Dictionary(snapshot.items.compactMap { item in item.note.map { (item.id, $0) } }, uniquingKeysWith: { first, _ in first }))
         fetchedItems = Dictionary(grouping: snapshot.items, by: \.accountID)
         lastRefresh = snapshot.refreshedAt
         rebuildItems()
@@ -116,10 +122,18 @@ final class AppModel {
         tokens[accountID]
     }
 
-    func requestFocus(on itemID: String?) {
+    func requestFocus(on itemID: String?, editsNote: Bool = false) {
         // A merge request shown as part of its issue is selected through the issue.
         let topLevelID = itemID.flatMap { id in items.first { $0.id == id || $0.mergeRequests.contains { $0.id == id } }?.id }
         focusRequest = FocusRequest(itemID: topLevelID ?? itemID, serial: focusRequest.serial + 1)
+        noteToEdit = editsNote ? topLevelID ?? itemID : nil
+    }
+
+    /// True once for the item whose notes were asked to open.
+    func takeNoteToEdit(_ itemID: String) -> Bool {
+        guard noteToEdit == itemID else { return false }
+        noteToEdit = nil
+        return true
     }
 
     func requestBlockerSearch(for itemID: String) {
@@ -283,6 +297,7 @@ final class AppModel {
                 item.wait = plan.waits[item.id]
                 item.waitDescription = item.wait.map { describe($0, of: item, in: byID) }
                 item.releasedBy = plan.released[item.id]?.finished.joined(separator: ", ")
+                item.note = plan.notes[item.id]
                 return item
             }
             .sorted { lhs, rhs in
@@ -325,9 +340,17 @@ final class AppModel {
             merged.note = merged.note ?? wait.note
             waits[owner] = merged.isEmpty ? nil : merged
         }
-        if order != plan.order || waits != plan.waits {
+        // Notes written on a merge request before it joined its issue go below the issue's own.
+        var notes = plan.notes
+        for (itemID, note) in plan.notes {
+            guard let owner = issueOf[itemID] else { continue }
+            notes[itemID] = nil
+            notes[owner] = notes[owner].map { ItemNote(text: $0.text + "\n\n" + note.text, updatedAt: max($0.updatedAt, note.updatedAt)) } ?? note
+        }
+        if order != plan.order || waits != plan.waits || notes != plan.notes {
             plan.order = order
             plan.waits = waits
+            plan.notes = notes
             savePlan()
         }
     }
@@ -436,6 +459,22 @@ final class AppModel {
 
     func stopWaiting(_ item: TodoItem) {
         updateWait(Wait(), forItemID: item.id)
+    }
+
+    // MARK: Notes
+
+    /// Saves the note as written; an empty one is removed.
+    func setNote(_ text: String, forItemID itemID: String) {
+        guard text != plan.notes[itemID]?.text ?? "" else { return }
+        let isEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        plan.notes[itemID] = isEmpty ? nil : ItemNote(text: text, updatedAt: .now)
+        planChanged()
+    }
+
+    func toggleTask(line: Int, forItemID itemID: String) {
+        guard let note = plan.notes[itemID] else { return }
+        plan.notes[itemID] = note.toggling(line: line)
+        planChanged()
     }
 
     /// Finds open issues and merge requests `item` could wait on: by words in the title, by number, or by a pasted
@@ -859,6 +898,9 @@ final class AppModel {
         tokens[account.id] = nil
         userIDs[account.id] = nil
         prunePlan(accountID: account.id, keeping: [], previous: [])
+        // Notes outlive their items, not their GitLab.
+        plan.notes = plan.notes.filter { !$0.key.hasPrefix(account.id.uuidString + ":") }
+        savePlan()
         persistAccounts()
         rebuildItems()
     }

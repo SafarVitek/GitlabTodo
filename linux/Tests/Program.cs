@@ -129,7 +129,7 @@ dm.RemoveLink(Did("docs#3"), Did("infra#5"));
 Check(!dm.Items.First(i => i.ShortReference == "docs#3").IsWaiting, "link removed");
 Check(Same(dm.Dependents(Did("backend#12")).Select(i => i.ShortReference), "backend#21"), "dependents of an item");
 var legacyDelays = JsonSerializer.Deserialize<Plan>("""{"order":["a"]}""", Storage.Json)!;
-Check(legacyDelays.Delays.Count == 0 && legacyDelays.Tracked.Count == 0, "older plans load without delays");
+Check(legacyDelays.Delays.Count == 0 && legacyDelays.Tracked.Count == 0 && legacyDelays.Notes.Count == 0, "older plans load without delays and notes");
 
 Check(Zoom.Step(1.0, 0.1) == 1.1 && Zoom.Step(0.3, -0.1) == 0.3 && Zoom.Step(1.47, 0.1) == 1.5 && Zoom.Step(0.83, -0.1) == 0.7, "zoom steps by 10 % within its range");
 
@@ -148,6 +148,30 @@ var sso = stale.FindIndex(i => i.ShortReference == "backend#12");
 stale[sso] = stale[sso] with { Wait = new Wait { ItemIds = [stale.First(i => i.ShortReference == "backend#33").Id] } };
 var staleSchedule = TimelineSchedule.Build(stale, [], stale.Select((item, index) => (item.Id, index)).ToDictionary(p => p.Id, p => p.index));
 Check(Same(staleSchedule.Lanes.First(l => l.Name == "backend").Blocks.Take(2).Select(b => b.Item!.ShortReference), "backend#33", "backend#12"), "timeline straightens stored order");
+
+// Notes: free text with GitLab-style tasks, kept locally per item.
+var noteText = new ItemNote("Zápis\n- [ ] první\n  * [x] druhý\n[ ] třetí\n- [ ]\n- bod\n[x]neúkol", DateTimeOffset.Now);
+Check(Same(noteText.Tasks.Select(t => t.Text), "první", "druhý", "třetí", "") && noteText.Tasks.Select(t => t.IsDone).SequenceEqual([false, true, false, false]),
+    $"tasks parsed: {string.Join(", ", noteText.Tasks.Select(t => t.Text))}");
+Check(noteText.OpenTasks.Select(t => t.Line).SequenceEqual([1, 3, 4]), "open tasks");
+Check(noteText.Toggling(1).Text == "Zápis\n- [x] první\n  * [x] druhý\n[ ] třetí\n- [ ]\n- bod\n[x]neúkol", "tick a task off");
+Check(!noteText.Toggling(2).Tasks[1].IsDone && noteText.Toggling(5) == noteText, "tick back on, other lines untouched");
+var nm = Preview();
+string Nid(string reference) => nm.Items.First(i => i.ShortReference == reference).Id;
+Check(nm.Items.First(i => i.ShortReference == "backend#33").Note?.OpenTasks.Count == 2, "preview note on the issue with its MR");
+nm.SetNote("Meeting\n- [ ] zavolat", Nid("infra#5"));
+Check(Same(nm.Items.First(i => i.ShortReference == "infra#5").Note?.Tasks.Select(t => t.Text) ?? [], "zavolat"), "note saved on the item");
+nm.ToggleTask(1, Nid("infra#5"));
+Check(nm.Items.First(i => i.ShortReference == "infra#5").Note?.OpenTasks.Count == 0, "task ticked off");
+nm.SetNote("  \n", Nid("infra#5"));
+Check(nm.Items.First(i => i.ShortReference == "infra#5").Note is null, "an empty note is removed");
+var mergeRequestId = nm.Items.First(i => i.ShortReference == "backend#33").MergeRequests[0].Id;
+nm.SetNote("z MR", mergeRequestId);
+Check(nm.Items.First(i => i.ShortReference == "backend#33").Note?.Text.EndsWith("\n\nz MR") == true, "a note on a grouped MR joins its issue");
+nm.RequestFocus(Nid("docs#3"), editsNote: true);
+Check(nm.TakeNoteToEdit(Nid("docs#3")) && !nm.TakeNoteToEdit(Nid("docs#3")), "a request opens the note once");
+var notedPlan = JsonSerializer.Deserialize<Plan>("""{"order":[],"notes":{"a":{"text":"x","updatedAt":"2026-10-27T12:00:00Z"}}}""", Storage.Json)!;
+Check(notedPlan.Notes["a"].Text == "x" && JsonSerializer.Serialize(notedPlan, Storage.Json).Contains("\"updatedAt\": \"2026-10-27T12:00:00Z\""), "notes load and save like the macOS app's");
 
 // Grouping: an MR closing an issue, or named after it, joins the issue.
 var account = Guid.NewGuid();

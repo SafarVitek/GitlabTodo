@@ -286,6 +286,13 @@ private struct CompactRow: View {
                     if let threads = item.reviewThreads {
                         ThreadsBadge(resolved: threads.resolved, total: threads.total)
                             .font(.system(size: 10.5))
+                            // A cut badge says nothing, the title gives way instead.
+                            .fixedSize()
+                    }
+                    if let note = item.note {
+                        NoteBadge(note: note)
+                            .font(.system(size: 10.5))
+                            .fixedSize()
                     }
                     if showsProject {
                         // Next to a button only the project color fits, the title needs the room more.
@@ -353,14 +360,25 @@ private struct DetailedRow: View {
                         if let threads = item.reviewThreads {
                             ThreadsBadge(resolved: threads.resolved, total: threads.total)
                         }
+                        if let note = item.note {
+                            NoteBadge(note: note)
+                            // The next thing to do gets room before the labels, which fold into „+N“.
+                            if let task = note.openTasks.first {
+                                Text(task.text)
+                                    .foregroundStyle(Palette.note)
+                                    .layoutPriority(-1)
+                            }
+                        }
                         FittingLabels(labels: item.labels)
                             .font(.system(size: 9.5))
+                            .layoutPriority(-2)
                         if !item.isPlaced {
                             Text("nové")
                                 .fontWeight(.semibold)
                                 .foregroundStyle(Color.accentColor)
                         }
                         Spacer(minLength: 6)
+                            .layoutPriority(-3)
                         if showsProject {
                             ProjectLabel(item: item, maxWidth: 120)
                         }

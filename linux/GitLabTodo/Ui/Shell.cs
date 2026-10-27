@@ -138,7 +138,8 @@ public sealed class Shell
             menu.Items.Add(Item($"{prefix}{title}  ({item.ShortReference})", () =>
             {
                 ShowMain();
-                state.RequestFocus(item.Id);
+                // Like a click in the macOS widget: ready to write down a note.
+                state.RequestFocus(item.Id, editsNote: true);
             }));
         }
         if (ready.Count > 10)

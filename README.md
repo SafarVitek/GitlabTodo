@@ -22,6 +22,8 @@ Aplikace je ve dvou verzích se stejnými funkcemi a stejným formátem dat:
 - Pořadí práce přetahováním, nové položky čekají v „Nezařazených“.
 - „Čeká na“ jinou položku, issue kolegy (i z druhého GitLabu) nebo vlastní důvod. Až se to dokončí,
   položka se sama uvolní a ukáže se jako připravená.
+- Poznámky k položce, třeba zápis z meetingu, s úkoly psanými jako v GitLabu (`- [ ] …`). Klik na položku
+  ve widgetu otevře poznámku rovnou k psaní, widget ukazuje, kolik úkolů je hotových, a ten další na řadě.
 - Timeline: řádek pro každý projekt, kroky „Teď, +1, +2…“, šipky vazeb, mezery tam, kde se čeká nebo
   kde je položka odložená. Přetahování, vazby šipkou z tečky na bloku, zoom.
 - Jedním kliknutím (s potvrzením) vytvořit k issue větev a draft MR, nebo draft MR označit jako ready

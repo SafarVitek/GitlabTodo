@@ -50,6 +50,9 @@ extension Snapshot {
         exportMergeRequest.unresolvedThreads = 2
         exportMergeRequest.hasConflicts = true
         export.mergeRequests = [exportMergeRequest]
+        export.note = ItemNote(
+            text: "Meeting s účetními:\n- export i do XLSX, ale až v další verzi\n- [x] domluvit formát data\n- [ ] přidat sloupec DIČ\n- [ ] poslat vzorek ke kontrole",
+            updatedAt: .now.addingTimeInterval(-3600))
         let sso = item(12, "backend", "Opravit přihlášení přes SSO", labels: [bug, security, customer])
         let disk = item(5, "infra", "Zvětšit disk na build serveru")
         var review = item(52, "frontend", "Přepsat filtr faktur na nové API", mergeRequest: true)

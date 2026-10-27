@@ -32,6 +32,9 @@ struct ItemMeta: View {
             if let waitDescription = item.waitDescription {
                 WaitMark(description: waitDescription)
             }
+            if let note = item.note {
+                NoteBadge(note: note)
+            }
             if let branch = item.mergeRequest?.sourceBranch, item.mergeRequest?.role == .assigned {
                 Label(branch, systemImage: "arrow.triangle.branch")
             }

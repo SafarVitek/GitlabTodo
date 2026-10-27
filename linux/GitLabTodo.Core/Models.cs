@@ -117,6 +117,49 @@ public sealed record Wait
         other is not null && ItemIds.SequenceEqual(other.ItemIds) && External.SequenceEqual(other.External) && Note == other.Note;
 }
 
+/// The user's own notes on an item, e.g. from a meeting. Lines written like GitLab's task lists, `- [ ] call Petr`,
+/// are tasks to tick off.
+public sealed partial record ItemNote(
+    [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("updatedAt"), JsonConverter(typeof(WholeSecondsConverter))] DateTimeOffset UpdatedAt)
+{
+    public sealed record NoteTask(int Line, string Text, bool IsDone);
+
+    /// `- [ ] text`, `* [x] text` or just `[ ] text`.
+    [GeneratedRegex(@"^\s*(?:[-*+]\s+)?\[(?<mark>[ xX])\](?:\s+(?<text>.*))?$")]
+    private static partial Regex TaskLine();
+
+    [JsonIgnore]
+    public string[] Lines => Text.Split('\n');
+
+    [JsonIgnore]
+    public List<NoteTask> Tasks => Lines
+        .Select((line, index) => (Match: TaskLine().Match(line), Index: index))
+        .Where(m => m.Match.Success)
+        .Select(m => new NoteTask(m.Index, m.Match.Groups["text"].Value, m.Match.Groups["mark"].Value != " "))
+        .ToList();
+
+    [JsonIgnore]
+    public List<NoteTask> OpenTasks => Tasks.Where(t => !t.IsDone).ToList();
+
+    /// For tooltips: the beginning of the note.
+    [JsonIgnore]
+    public string Preview => Text.Length > 400 ? Text[..399] + "…" : Text;
+
+    /// Ticks a task off or back on, leaving the rest of the note as written.
+    public ItemNote Toggling(int line, DateTimeOffset? date = null)
+    {
+        var lines = Lines;
+        if (line < 0 || line >= lines.Length || TaskLine().Match(lines[line]) is not { Success: true } match)
+        {
+            return this;
+        }
+        var mark = match.Groups["mark"];
+        lines[line] = lines[line][..mark.Index] + (mark.Value == " " ? "x" : " ") + lines[line][(mark.Index + 1)..];
+        return new ItemNote(string.Join('\n', lines), date ?? DateTimeOffset.Now);
+    }
+}
+
 /// What got done so that an item can start.
 public sealed record Release(
     [property: JsonPropertyName("date"), JsonConverter(typeof(WholeSecondsConverter))] DateTimeOffset Date,
@@ -143,6 +186,10 @@ public sealed class Plan
     /// Empty timeline steps the user put before an item, to start it later.
     [JsonPropertyName("delays")]
     public Dictionary<string, int> Delays { get; set; } = [];
+
+    /// The user's notes on items, kept after the item is done.
+    [JsonPropertyName("notes")]
+    public Dictionary<string, ItemNote> Notes { get; set; } = [];
 }
 
 /// An action and the item it runs on, which for an issue with a merge request is the merge request.
@@ -180,6 +227,8 @@ public sealed record TodoItem
     public string? WaitDescription { get; init; }
     /// What got done so that this item can start, shown until the user looks at the item.
     public string? ReleasedBy { get; init; }
+    /// The user's notes and tasks, kept locally.
+    public ItemNote? Note { get; init; }
     /// Merge requests that close this issue, shown as part of it rather than on their own.
     public List<TodoItem> MergeRequests { get; init; } = [];
     /// Index into the project palette, assigned so that projects do not share colors.

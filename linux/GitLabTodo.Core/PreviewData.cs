@@ -51,7 +51,14 @@ public static class PreviewData
             UnresolvedThreads = 2,
             HasConflicts = true,
         };
-        var export = Item(33, "backend", "Export faktur do CSV") with { HasMergeRequest = true, MergeRequests = [exportMergeRequest] };
+        var export = Item(33, "backend", "Export faktur do CSV") with
+        {
+            HasMergeRequest = true,
+            MergeRequests = [exportMergeRequest],
+            Note = new ItemNote(
+                "Meeting s účetními:\n- export i do XLSX, ale až v další verzi\n- [x] domluvit formát data\n- [ ] přidat sloupec DIČ\n- [ ] poslat vzorek ke kontrole",
+                DateTimeOffset.Now.AddHours(-1)),
+        };
         var sso = Item(12, "backend", "Opravit přihlášení přes SSO", labels: [bug, security, customer]);
         var disk = Item(5, "infra", "Zvětšit disk na build serveru");
         var review = Item(52, "frontend", "Přepsat filtr faktur na nové API", mergeRequest: true) with

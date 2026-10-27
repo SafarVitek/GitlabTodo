@@ -37,6 +37,7 @@ struct InspectorContent: View {
             if let step = item.nextStep, !item.isWaiting {
                 PrimaryStepButton(step: step)
             }
+            NoteSection(item: item)
             OrderSection(item: item)
             WaitSection(item: item, isSearchFocused: isSearchFocused)
             if let mergeRequest = item.mergeRequest {
@@ -118,6 +119,192 @@ private struct Box<Content: View>: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+    }
+}
+
+/// The user's notes on the item, e.g. from a meeting. Shown with the tasks as checkboxes, a click on the text edits it.
+private struct NoteSection: View {
+    @Environment(AppModel.self) private var model
+    @FocusState private var isFocused: Bool
+    @State private var isEditing = false
+    @State private var text = ""
+    @State private var selection: TextSelection?
+    let item: TodoItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                SectionTitle(title: "Poznámky", systemImage: "note.text")
+                Spacer(minLength: 4)
+                if let note = item.note, !note.tasks.isEmpty {
+                    NoteBadge(note: note)
+                        .font(.caption)
+                }
+                Button(action: addTask) {
+                    Label("Úkol", systemImage: "plus")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.borderless)
+                .help("Přidat úkol „- [ ] …“ na konec poznámky")
+            }
+            if isEditing {
+                editor
+            } else if let note = item.note {
+                NoteView(note: note) { line in
+                    model.toggleTask(line: line, forItemID: item.id)
+                } onEdit: {
+                    startEditing()
+                }
+                Text("Upraveno \(note.updatedAt.formatted(.relative(presentation: .named)))")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            } else {
+                Button(action: startEditing) {
+                    Label("Zápis z meetingu, úkoly, cokoli k tomuhle", systemImage: "square.and.pencil")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .onAppear(perform: editIfRequested)
+        .onChange(of: model.noteToEdit) { editIfRequested() }
+        .onChange(of: item.id) { oldID, _ in
+            if isEditing {
+                model.setNote(text, forItemID: oldID)
+                isEditing = false
+            }
+            editIfRequested()
+        }
+        .onChange(of: isFocused) {
+            if !isFocused {
+                finishEditing()
+            }
+        }
+        // Saved a moment after typing stops, so the widget follows without a save button.
+        .task(id: text) {
+            guard isEditing else { return }
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, isEditing else { return }
+            model.setNote(text, forItemID: item.id)
+        }
+    }
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextEditor(text: $text, selection: $selection)
+                .font(.callout)
+                .scrollContentBackground(.hidden)
+                .focused($isFocused)
+                .frame(minHeight: 120)
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1))
+            HStack {
+                Text("Úkol napíšeš jako „- [ ] text“, ukládá se průběžně.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 4)
+                Button("Hotovo", action: finishEditing)
+                    .controlSize(.small)
+                    .keyboardShortcut(.return, modifiers: .command)
+            }
+        }
+    }
+
+    /// A click on the item in the widget lands here, ready to write.
+    private func editIfRequested() {
+        if model.takeNoteToEdit(item.id) {
+            startEditing()
+        }
+    }
+
+    /// The note as stored now; `item` can be a moment behind right after a save.
+    private var storedText: String {
+        model.item(withID: item.id)?.note?.text ?? ""
+    }
+
+    private func startEditing() {
+        if !isEditing {
+            text = storedText
+            isEditing = true
+        }
+        selection = TextSelection(insertionPoint: text.endIndex)
+        // The editor exists only after this update, focus it in the next one.
+        Task { isFocused = true }
+    }
+
+    private func addTask() {
+        if !isEditing {
+            text = storedText
+        }
+        if !text.isEmpty, !text.hasSuffix("\n") {
+            text += "\n"
+        }
+        text += "- [ ] "
+        startEditing()
+    }
+
+    private func finishEditing() {
+        guard isEditing else { return }
+        model.setNote(text, forItemID: item.id)
+        isEditing = false
+    }
+}
+
+/// A note as text, with its tasks as checkboxes.
+private struct NoteView: View {
+    let note: ItemNote
+    let onToggle: (Int) -> Void
+    let onEdit: () -> Void
+
+    var body: some View {
+        let tasks = Dictionary(note.tasks.map { ($0.line, $0) }, uniquingKeysWith: { first, _ in first })
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(note.lines.enumerated()), id: \.offset) { index, line in
+                if let task = tasks[index] {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Button {
+                            onToggle(index)
+                        } label: {
+                            Image(systemName: task.isDone ? "checkmark.square.fill" : "square")
+                                .foregroundStyle(task.isDone ? Color.green : Color.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(task.isDone ? "Vrátit jako nehotové" : "Hotovo")
+                        Text(Self.inline(task.text))
+                            .strikethrough(task.isDone)
+                            .foregroundStyle(task.isDone ? .secondary : .primary)
+                    }
+                } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Color.clear.frame(height: 2)
+                } else {
+                    Text(Self.inline(Self.bulleted(line)))
+                }
+            }
+        }
+        .font(.callout)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onEdit)
+        .help("Kliknutím upravíš")
+    }
+
+    /// `- point` shown as `• point`.
+    private static func bulleted(_ line: String) -> String {
+        guard let match = line.wholeMatch(of: /(\s*)[-*+]\s+(.*)/) else { return line }
+        return "\(match.1)•  \(match.2)"
+    }
+
+    /// Bold, italics, code and links as in Markdown, anything else as written.
+    private static func inline(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
     }
 }
 

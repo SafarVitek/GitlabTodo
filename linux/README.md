@@ -12,6 +12,8 @@ liště s tím, co je na řadě. Instalace přes Nix je popsaná v [README v ko�
   projektu (bude na něj čekat). Vazbu nakreslíš tažením z oranžové tečky na pravém okraji bloku, odebereš
   ji pravým tlačítkem na šipce. „+“ u projektu přidá cizí issue nebo MR.
 - Zoom timeline: Ctrl + kolečko, Ctrl + / Ctrl − / Ctrl 0.
+- Poznámky k položce (třeba zápis z meetingu) jsou v detailu, úkoly se píšou jako `- [ ] text` a odškrtávají
+  se rovnou v náhledu. Klik na položku v nabídce v liště otevře poznámku k psaní.
 - F5 nebo Ctrl R obnoví data, Ctrl , otevře nastavení, Ctrl Q aplikaci ukončí i z lišty.
 
 ## Data
@@ -19,7 +21,7 @@ liště s tím, co je na řadě. Instalace přes Nix je popsaná v [README v ko�
 - `~/.config/gitlab-todo/settings.json`: připojené GitLaby a nastavení.
 - `~/.config/gitlab-todo/tokens.json`: tokeny, čitelné jen pro tebe (práva 600). Nejsou v klíčence
   systému, aby aplikace nepotřebovala žádnou další službu.
-- `~/.local/share/gitlab-todo/plan.json`: pořadí, vazby, odklady a cizí položky v timeline. Formát je
+- `~/.local/share/gitlab-todo/plan.json`: pořadí, vazby, odklady, poznámky a cizí položky v timeline. Formát je
   stejný jako u macOS verze.
 - `~/.local/share/gitlab-todo/snapshot.json`: poslední stažený stav, aby seznam nebyl po startu prázdný.
 

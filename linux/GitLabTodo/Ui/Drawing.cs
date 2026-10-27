@@ -38,6 +38,8 @@ public enum IconKind
     ToBottom,
     Server,
     Trash,
+    Note,
+    Checklist,
 }
 
 /// Icons drawn as vectors on a 16 × 16 grid, sharp at any size and zoom. In the spirit of the SF Symbols the macOS
@@ -246,6 +248,18 @@ public static class Icons
                 Box(thin, 2, 9, 14, 13.5, 1.5);
                 Circle(brush, null, 4.6, 4.75, 0.7);
                 Circle(brush, null, 4.6, 11.25, 0.7);
+                break;
+            case IconKind.Note:
+                Box(thin, 2.5, 1.5, 13.5, 14.5, 2);
+                Line(thin, 5, 5, 11, 5);
+                Line(thin, 5, 8, 11, 8);
+                Line(thin, 5, 11, 9, 11);
+                break;
+            case IconKind.Checklist:
+                Path(null, thin, false, new(1.5, 4), new(3, 5.5), new(5.5, 2.5));
+                Line(thin, 8, 4, 14.5, 4);
+                Box(thin, 1.8, 9.6, 5.2, 13, 0.8);
+                Line(thin, 8, 11.3, 14.5, 11.3);
                 break;
             case IconKind.Trash:
                 Line(thin, 2.5, 4.5, 13.5, 4.5);

@@ -10,6 +10,8 @@ public static class Palette
     public const string MergeRequest = "#AF52DE";
     public const string Ready = "#34C759";
     public const string Threads = "#FF3B30";
+    /// Open tasks in the user's notes.
+    public const string Note = "#007AFF";
 
     /// Green and purple belong to issues and merge requests, orange to waiting, red to review threads.
     /// Blue, pink, yellow, teal, brown and indigo, in the macOS app's order so a project gets the same color.

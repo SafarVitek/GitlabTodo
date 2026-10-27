@@ -90,6 +90,53 @@ struct ExternalBlocker: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// The user's own notes on an item, e.g. from a meeting. Lines written like GitLab's task lists, `- [ ] call Petr`,
+/// are tasks to tick off.
+struct ItemNote: Codable, Hashable, Sendable {
+    struct Task: Hashable, Sendable {
+        /// Index of the line in `text`.
+        let line: Int
+        let text: String
+        let isDone: Bool
+    }
+
+    var text: String
+    var updatedAt: Date
+
+    var lines: [String] {
+        text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    }
+
+    var tasks: [Task] {
+        lines.enumerated().compactMap { index, line in
+            Self.match(line).map { Task(line: index, text: String($0.text ?? ""), isDone: $0.mark != " ") }
+        }
+    }
+
+    var openTasks: [Task] {
+        tasks.filter { !$0.isDone }
+    }
+
+    /// For tooltips: the beginning of the note.
+    var preview: String {
+        text.count > 400 ? String(text.prefix(399)) + "…" : text
+    }
+
+    /// Ticks a task off or back on, leaving the rest of the note as written.
+    func toggling(line index: Int, at date: Date = .now) -> ItemNote {
+        var lines = lines
+        guard lines.indices.contains(index), let match = Self.match(lines[index]) else { return self }
+        let line = match.mark.base
+        lines[index] = String(line[..<match.mark.startIndex]) + (match.mark == " " ? "x" : " ") + String(line[match.mark.endIndex...])
+        return ItemNote(text: lines.joined(separator: "\n"), updatedAt: date)
+    }
+
+    /// `- [ ] text`, `* [x] text` or just `[ ] text`.
+    private static func match(_ line: String) -> Regex<(Substring, mark: Substring, text: Substring?)>.Match? {
+        line.wholeMatch(of: /\s*(?:[-*+]\s+)?\[(?<mark>[ xX])\](?:\s+(?<text>.*))?/)
+    }
+}
+
 /// What the user types to point at an issue or merge request: a GitLab URL, `group/project#12`, `group/project!34`,
 /// or `#12` / `!34` within the item's own project.
 struct WorkItemReference: Equatable, Sendable {
@@ -161,6 +208,8 @@ struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var waitDescription: String?
     /// What got done so that this item can start, shown until the user looks at the item.
     var releasedBy: String?
+    /// The user's notes and tasks, kept locally.
+    var note: ItemNote?
     /// Merge requests that close this issue, shown as part of it rather than on their own.
     var mergeRequests: [TodoItem] = []
     /// Index into `Palette.projectColors`, assigned by the app so that projects do not share colors.

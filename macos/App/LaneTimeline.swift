@@ -915,6 +915,9 @@ private struct BlockView: View, Equatable {
             if item.hasMergeConflict {
                 ConflictIcon()
             }
+            if let note = item.note {
+                NoteBadge(note: note)
+            }
             if let threads = item.reviewThreads {
                 ThreadsBadge(resolved: threads.resolved, total: threads.total)
             }

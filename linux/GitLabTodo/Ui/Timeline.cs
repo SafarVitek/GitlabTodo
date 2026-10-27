@@ -571,6 +571,25 @@ internal sealed class TimelineCanvas : Control
             {
                 Add(IconKind.WarningFilled, Paint.Waiting());
             }
+            if (item.Note is { } note)
+            {
+                var tasks = note.Tasks;
+                var done = tasks.Count(t => t.IsDone);
+                var brush = tasks.Count == 0 ? Paint.Secondary : Paint.Brush(done == tasks.Count ? Palette.Ready : Palette.Note);
+                if (tasks.Count == 0)
+                {
+                    Add(IconKind.Note, brush);
+                }
+                else
+                {
+                    var count = Text.Make($"{done}/{tasks.Count}", m.Scaled(11), brush, FontWeight.SemiBold);
+                    parts.Add((size + m.Scaled(2) + count.Width, x =>
+                    {
+                        Icons.Draw(context, IconKind.Checklist, new Rect(x, centerY - size / 2, size, size), brush);
+                        context.DrawText(count, new Point(x + size + m.Scaled(2), centerY - count.Height / 2));
+                    }));
+                }
+            }
             if (item.ReviewThreads is { } threads)
             {
                 var isDone = threads.Resolved == threads.Total;

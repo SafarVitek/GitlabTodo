@@ -64,7 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .open(let target):
             NSWorkspace.shared.open(target)
         case .show(let itemID):
-            AppModel.shared.requestFocus(on: itemID)
+            // A click on an item in the widget is there to write down a note on it.
+            AppModel.shared.requestFocus(on: itemID, editsNote: itemID != nil)
             Windows.showMain()
         case .action(let action, let itemID):
             Task { await AppModel.shared.perform(action, onItemWithID: itemID) }

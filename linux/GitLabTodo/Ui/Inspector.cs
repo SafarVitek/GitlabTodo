@@ -19,6 +19,7 @@ public sealed class Inspector : Panel
     private readonly ContentControl order = new();
     private readonly StackPanel blockers = new() { Spacing = 2 };
     private readonly ContentControl mergeRequest = new();
+    private readonly NotesSection notes;
     private readonly WorkItemSearch search;
     private readonly TextBox note;
     private TodoItem? item;
@@ -26,6 +27,7 @@ public sealed class Inspector : Panel
     public Inspector(AppState state)
     {
         this.state = state;
+        notes = new NotesSection(state);
         search = new WorkItemSearch("slovo z názvu, číslo nebo odkaz", text => state.SearchBlockers(text, item!), candidate => state.AddBlocker(candidate, item!))
         {
             PickSuggestion = blocker => state.ToggleBlocker(blocker, item!),
@@ -60,7 +62,7 @@ public sealed class Inspector : Panel
         wait.Children.Add(Hint("Až se všechno dokončí, čekání skončí samo a položka se ukáže jako připravená."));
 
         var content = new StackPanel { Spacing = 22, Margin = new Thickness(16) };
-        content.Children.AddRange([header, step, order, wait, mergeRequest]);
+        content.Children.AddRange([header, step, notes, order, wait, mergeRequest]);
         scroller.Content = content;
         Children.Add(scroller);
         Children.Add(placeholder);
@@ -76,6 +78,7 @@ public sealed class Inspector : Panel
         }
         var isNewItem = item?.Id != shown?.Id;
         item = shown;
+        notes.Show(shown);
         scroller.IsVisible = shown is not null;
         placeholder.IsVisible = shown is null;
         if (shown is null)

@@ -5,6 +5,8 @@ enum Palette {
     /// Title color of the widget and the panel.
     static let headline = Color(red: 0.86, green: 0.30, blue: 0.24)
     static let waiting = Color.orange
+    /// Open tasks in the user's notes.
+    static let note = Color.blue
 
     /// Green and purple belong to issues and merge requests, orange to waiting, red to review threads.
     static let projectColors: [Color] = [.blue, .pink, .yellow, .teal, .brown, .indigo]
@@ -113,16 +115,38 @@ struct ProjectLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             if showsName {
-                Text(item.projectName)
-                    .lineLimit(1)
-                    .frame(maxWidth: maxWidth, alignment: .trailing)
-                    .fixedSize(horizontal: maxWidth == nil, vertical: false)
+                if let maxWidth {
+                    CappedWidth(maxWidth: maxWidth) {
+                        Text(item.projectName)
+                            .lineLimit(1)
+                    }
+                } else {
+                    Text(item.projectName)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             Circle()
                 .fill(Palette.project(item.projectColor))
                 .frame(width: 7, height: 7)
         }
         .foregroundStyle(.secondary)
+    }
+}
+
+/// As wide as its content needs, at most `maxWidth`. Unlike `.frame(maxWidth:)` it does not take more than it needs,
+/// which would leave nothing to lower-priority neighbours.
+struct CappedWidth: Layout {
+    let maxWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let width = min(content.sizeThatFits(.unspecified).width, maxWidth, proposal.width ?? .infinity)
+        return content.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing, proposal: ProposedViewSize(bounds.size))
     }
 }
 
@@ -253,6 +277,26 @@ struct ThreadsBadge: View {
         .fontWeight(.semibold)
         .foregroundStyle(isDone ? Color.green : Color.red)
         .help(isDone ? "Všechna vlákna jsou vyřešená" : "Vyřešeno \(resolved) z \(total) vláken")
+    }
+}
+
+/// The item has notes: tasks as done/total in blue, green once all are done, a plain note as its icon.
+struct NoteBadge: View {
+    let note: ItemNote
+
+    var body: some View {
+        let tasks = note.tasks
+        let done = tasks.filter(\.isDone).count
+        HStack(spacing: 2) {
+            Image(systemName: tasks.isEmpty ? "note.text" : "checklist")
+            if !tasks.isEmpty {
+                Text("\(done)/\(tasks.count)")
+                    .monospacedDigit()
+            }
+        }
+        .fontWeight(.semibold)
+        .foregroundStyle(tasks.isEmpty ? Color.secondary : done == tasks.count ? Color.green : Palette.note)
+        .help(note.preview)
     }
 }
 

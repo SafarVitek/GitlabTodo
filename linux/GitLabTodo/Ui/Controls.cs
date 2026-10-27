@@ -250,6 +250,19 @@ public static class Views
         return badge;
     }
 
+    /// The item has notes: tasks as done/total in blue, green once all are done, a plain note as its icon.
+    public static Control NoteBadge(ItemNote note, double size = 12)
+    {
+        var tasks = note.Tasks;
+        var done = tasks.Count(t => t.IsDone);
+        var brush = tasks.Count == 0 ? Paint.Secondary : Paint.Brush(done == tasks.Count ? Palette.Ready : Palette.Note);
+        Control badge = tasks.Count == 0
+            ? new Icon(IconKind.Note, brush, size)
+            : IconLabel(IconKind.Checklist, $"{done}/{tasks.Count}", brush, size, FontWeight.SemiBold);
+        ToolTip.SetTip(badge, note.Preview);
+        return badge;
+    }
+
     public static Control WaitMark(string description, bool showsLabel = true, double size = 12) =>
         IconLabel(IconKind.PauseCircleFilled, showsLabel ? $"čeká na {description}" : description, Paint.Waiting(), size, FontWeight.Medium);
 
@@ -308,6 +321,10 @@ public static class Views
         if (item.WaitDescription is { } waitDescription)
         {
             row.Children.Add(WaitMark(waitDescription));
+        }
+        if (item.Note is { } note)
+        {
+            row.Children.Add(NoteBadge(note));
         }
         if (item.MergeRequest is { Role: ItemRole.Assigned, SourceBranch: { } branch })
         {

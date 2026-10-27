@@ -66,6 +66,7 @@ public sealed class AppState
             Waits = snapshot.Items.Where(i => i.Wait is not null).DistinctBy(i => i.Id).ToDictionary(i => i.Id, i => i.Wait!),
             Released = snapshot.Items.Where(i => i.ReleasedBy is not null).DistinctBy(i => i.Id)
                 .ToDictionary(i => i.Id, i => new Release(DateTimeOffset.Now, [i.ReleasedBy!])),
+            Notes = snapshot.Items.Where(i => i.Note is not null).DistinctBy(i => i.Id).ToDictionary(i => i.Id, i => i.Note!),
         };
         fetchedItems = snapshot.Items.GroupBy(i => i.AccountId).ToDictionary(g => g.Key, g => g.ToList());
         LastRefresh = snapshot.RefreshedAt;
@@ -89,18 +90,32 @@ public sealed class AppState
     /// Place of each item, own or not, in the work order.
     public Dictionary<string, int> OrderPositions { get; private set; } = [];
     public Dictionary<string, int> TimelineDelays => plan.Delays;
+    /// An item whose notes open for writing once it is shown.
+    public string? NoteToEdit { get; private set; }
     public double RefreshMinutes => settings.RefreshMinutes > 0 ? settings.RefreshMinutes : 5;
     public bool KeepInTray => settings.KeepInTray;
     public double TimelineZoom => settings.TimelineZoom;
 
     public string? Token(Guid accountId) => tokens.GetValueOrDefault(accountId);
 
-    public void RequestFocus(string? itemId)
+    public void RequestFocus(string? itemId, bool editsNote = false)
     {
         // A merge request shown as part of its issue is selected through the issue.
         var topLevel = itemId is null ? null : Items.FirstOrDefault(i => i.Id == itemId || i.MergeRequests.Any(m => m.Id == itemId))?.Id;
         Focus = new FocusRequest(topLevel ?? itemId, false, Focus.Serial + 1);
+        NoteToEdit = editsNote ? topLevel ?? itemId : null;
         Changed?.Invoke();
+    }
+
+    /// True once for the item whose notes were asked to open.
+    public bool TakeNoteToEdit(string itemId)
+    {
+        if (NoteToEdit != itemId)
+        {
+            return false;
+        }
+        NoteToEdit = null;
+        return true;
     }
 
     public void RequestBlockerSearch(string itemId)
@@ -309,6 +324,7 @@ public sealed class AppState
                     Wait = wait,
                     WaitDescription = wait is null ? null : Describe(wait, item, byId),
                     ReleasedBy = plan.Released.TryGetValue(item.Id, out var release) ? string.Join(", ", release.Finished) : null,
+                    Note = plan.Notes.GetValueOrDefault(item.Id),
                 };
             })
             .OrderBy(item => position.TryGetValue(item.Id, out var place) ? place : int.MaxValue)
@@ -365,6 +381,18 @@ public sealed class AppState
             }
         }
         plan.Waits = waits;
+        // Notes written on a merge request before it joined its issue go below the issue's own.
+        foreach (var (itemId, note) in plan.Notes.ToList())
+        {
+            if (issueOf.GetValueOrDefault(itemId) is not { } owner)
+            {
+                continue;
+            }
+            plan.Notes.Remove(itemId);
+            plan.Notes[owner] = plan.Notes.TryGetValue(owner, out var own)
+                ? new ItemNote(own.Text + "\n\n" + note.Text, own.UpdatedAt > note.UpdatedAt ? own.UpdatedAt : note.UpdatedAt)
+                : note;
+        }
         if (PlanJson() != before)
         {
             SavePlan();
@@ -520,6 +548,35 @@ public sealed class AppState
     }
 
     public void StopWaiting(TodoItem item) => UpdateWait(new Wait(), item.Id);
+
+    // MARK: Notes
+
+    /// Saves the note as written; an empty one is removed.
+    public void SetNote(string text, string itemId)
+    {
+        if (text == (plan.Notes.GetValueOrDefault(itemId)?.Text ?? ""))
+        {
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            plan.Notes.Remove(itemId);
+        }
+        else
+        {
+            plan.Notes[itemId] = new ItemNote(text, DateTimeOffset.Now);
+        }
+        PlanChanged();
+    }
+
+    public void ToggleTask(int line, string itemId)
+    {
+        if (plan.Notes.GetValueOrDefault(itemId) is { } note)
+        {
+            plan.Notes[itemId] = note.Toggling(line);
+            PlanChanged();
+        }
+    }
 
     /// Finds open issues and merge requests `item` could wait on: by words in the title, by number, or by a pasted
     /// URL or `group/project#12`. Leaves out the item itself and what it already waits on.
@@ -1120,6 +1177,9 @@ public sealed class AppState
         userIds.Remove(account.Id);
         SaveTokens();
         PrunePlan(account.Id, [], []);
+        // Notes outlive their items, not their GitLab.
+        plan.Notes = plan.Notes.Where(n => !n.Key.StartsWith(account.Id.IdString() + ":", StringComparison.Ordinal)).ToDictionary();
+        SavePlan();
         SaveSettings();
         RebuildItems();
     }
