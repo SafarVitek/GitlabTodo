@@ -74,8 +74,7 @@ public sealed class TimelineView : Panel
     {
         placeholder.IsVisible = schedule.Lanes.Count == 0;
         var old = canvas.Metrics.Zoom;
-        canvas.Show(schedule, selection, zoom);
-        if (Math.Abs(old - zoom) > 0.001)
+        if (canvas.Show(schedule, selection, zoom) && Math.Abs(old - zoom) > 0.001)
         {
             KeepCenter(old, zoom);
         }
@@ -115,6 +114,7 @@ internal sealed class TimelineCanvas : Control
     private LinkDrag? link;
     private BlockDrag? drag;
     private Point viewportPointer;
+    private (TimelineSchedule Schedule, string? Selection, double Zoom)? pending;
 
     public TimelineCanvas(AppState state, ScrollViewer scroller)
     {
@@ -130,7 +130,20 @@ internal sealed class TimelineCanvas : Control
 
     public TimelineMetrics Metrics { get; private set; } = new(1);
 
-    public void Show(TimelineSchedule shown, string? selected, double zoom)
+    /// Returns false when a drag is in progress: a new layout would move the blocks from under the pointer, so it
+    /// waits for the drop.
+    public bool Show(TimelineSchedule shown, string? selected, double zoom)
+    {
+        if (link is not null || drag is not null)
+        {
+            pending = (shown, selected, zoom);
+            return false;
+        }
+        Apply(shown, selected, zoom);
+        return true;
+    }
+
+    private void Apply(TimelineSchedule shown, string? selected, double zoom)
     {
         schedule = shown;
         selection = selected;
@@ -714,20 +727,14 @@ internal sealed class TimelineCanvas : Control
     {
         base.OnPointerReleased(e);
         var position = e.GetPosition(this);
-        if (link is { } drawn)
+        // Acting before the drag ends, so the drop is judged against the layout the user saw.
+        if (link is { } drawn && BlockAt(position) is { } target && state.CanLink(target.Block.Id, drawn.From.Id))
         {
-            EndDrags();
-            if (BlockAt(position) is { } target && state.CanLink(target.Block.Id, drawn.From.Id))
-            {
-                state.Link(target.Block.Id, drawn.From.Id);
-            }
-            return;
+            state.Link(target.Block.Id, drawn.From.Id);
         }
-        if (drag is { IsMoving: true } dragged)
+        else if (drag is { IsMoving: true } dragged)
         {
-            EndDrags();
             Drop(dragged, position);
-            return;
         }
         EndDrags();
     }
@@ -766,6 +773,11 @@ internal sealed class TimelineCanvas : Control
         autoScroll.Stop();
         Cursor = null;
         InvalidateVisual();
+        if (pending is { } next)
+        {
+            pending = null;
+            Apply(next.Schedule, next.Selection, next.Zoom);
+        }
     }
 
     /// Onto a block of the same lane moves it there, onto one of another lane makes it wait, onto an empty step of its
