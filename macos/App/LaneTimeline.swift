@@ -101,6 +101,7 @@ struct TimelineSchedule {
         var sorted = lanes.values.map { lane in
             var lane = lane
             lane.blocks.sort { (keys[$0.id] ?? 0, $0.title) < (keys[$1.id] ?? 0, $1.title) }
+            keepBehindBlockers(&lane.blocks)
             return lane
         }
         // The project with the most urgent own item first, projects of other people only after the user's.
@@ -116,6 +117,19 @@ struct TimelineSchedule {
             }
         }
         return TimelineSchedule(lanes: sorted, stepCount: (steps.values.max() ?? -1) + 1)
+    }
+
+    /// A block waiting on a later block of its own lane moves right behind it, whatever the stored order says.
+    private static func keepBehindBlockers(_ blocks: inout [TimelineBlock]) {
+        for _ in 0..<blocks.count * blocks.count {
+            guard let index = blocks.indices.first(where: { index in
+                blocks.indices.contains { $0 > index && blocks[index].blockers.contains(blocks[$0].id) }
+            }) else { return }
+            let blocker = blocks.indices.last { $0 > index && blocks[index].blockers.contains(blocks[$0].id) }!
+            let block = blocks.remove(at: index)
+            // The blocker moved one up with the removal, so this lands right after it.
+            blocks.insert(block, at: blocker)
+        }
     }
 
     /// Assigns steps lane by lane as far as blockers allow, repeating until nothing moves. A dependency cycle would

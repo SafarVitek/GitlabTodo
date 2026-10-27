@@ -558,8 +558,28 @@ final class AppModel {
         plan.waits[itemID] = wait.isEmpty ? nil : wait
         if !wait.isEmpty {
             plan.released[itemID] = nil
+            keepBehindBlockers(itemID)
         }
         planChanged()
+    }
+
+    /// An item waiting on another one of its own project goes after it in the work order. A blocker not in the
+    /// order yet is placed right before the item instead.
+    private func keepBehindBlockers(_ itemID: String) {
+        guard let item = items.first(where: { $0.id == itemID }), let wait = plan.waits[itemID] else { return }
+        let ownProject = wait.itemIDs.filter { id in items.first { $0.id == id }?.projectKey == item.projectKey }
+        let colleagues = wait.external.filter { "\($0.accountID.uuidString):\($0.projectID)" == item.projectKey }.map(\.id)
+        let sameLane = ownProject + colleagues
+        for blocker in sameLane where !plan.order.contains(blocker) {
+            if let position = plan.order.firstIndex(of: itemID) {
+                plan.order.insert(blocker, at: position)
+            }
+        }
+        guard let lastBlocker = sameLane.compactMap({ plan.order.firstIndex(of: $0) }).max(),
+              let position = plan.order.firstIndex(of: itemID), position < lastBlocker else { return }
+        plan.order.remove(at: position)
+        // The blocker moved one up with the removal, so this lands right after it.
+        plan.order.insert(itemID, at: lastBlocker)
     }
 
     /// Closed issues and merged MRs leave the plan, and whatever waited on them can go on.

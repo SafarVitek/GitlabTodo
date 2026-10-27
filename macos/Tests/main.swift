@@ -122,6 +122,21 @@ MainActor.assumeIsolated {
 
     check(LaneTimeline.zoom(1.0, by: 0.1) == 1.1 && LaneTimeline.zoom(0.3, by: -0.1) == 0.3 && LaneTimeline.zoom(1.47, by: 0.1) == 1.5 && LaneTimeline.zoom(0.83, by: -0.1) == 0.7, "zoom steps by 10 % within its range")
 
+    // A link back to a later item of the same project reorders, rather than drawing an arrow backwards.
+    let bm = AppModel(preview: .preview)
+    let bid = { (ref: String) in bm.items.first { $0.shortReference == ref }!.id }
+    bm.link(bid("backend#12"), waitsOn: bid("backend#33"))
+    let backendLane = bm.timelineSchedule().lanes.first { $0.name == "backend" }!.blocks
+    check(backendLane.prefix(3).compactMap(\.item?.shortReference) == ["backend#33", "backend#12", "backend#21"], "waiting item moved behind its blocker: \(backendLane.compactMap(\.item?.shortReference))")
+    check(backendLane.first { $0.item?.shortReference == "backend#12" }?.slot == 1, "and starts after it")
+    check(bm.items.filter { $0.projectName == "backend" }.prefix(2).map(\.shortReference) == ["backend#33", "backend#12"], "the work order in the list follows")
+    // Older data where the waiting item comes first: the timeline puts it behind anyway.
+    var stale = Snapshot.preview.items
+    let sso = stale.firstIndex { $0.shortReference == "backend#12" }!
+    stale[sso].wait = Wait(itemIDs: [stale.first { $0.shortReference == "backend#33" }!.id])
+    let staleSchedule = TimelineSchedule.build(items: stale, external: [], positions: Dictionary(uniqueKeysWithValues: stale.enumerated().map { ($1.id, $0) }))
+    check(staleSchedule.lanes.first { $0.name == "backend" }!.blocks.prefix(2).compactMap(\.item?.shortReference) == ["backend#33", "backend#12"], "timeline straightens stored order")
+
     // Grouping: an MR closing an issue, or named after it, joins the issue.
     let account = UUID()
     func gl(_ kind: ItemKind, _ iid: Int, _ gid: Int, branch: String? = nil) -> TodoItem {
