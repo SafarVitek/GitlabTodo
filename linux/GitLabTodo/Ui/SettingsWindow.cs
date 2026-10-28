@@ -14,7 +14,7 @@ public sealed class SettingsWindow : Window
     private readonly Shell shell;
     private StackPanel accounts = null!;
     private ComboBox interval = null!;
-    private CheckBox keepInTray = null!;
+    private ToggleSwitch keepInTray = null!;
     private ComboBox theme = null!;
     private SyncSection sync = null!;
     private UpdatesSection updates = null!;
@@ -53,7 +53,7 @@ public sealed class SettingsWindow : Window
     {
         accounts = new StackPanel { Spacing = 6 };
         interval = new ComboBox { MinWidth = 120 };
-        keepInTray = new CheckBox { Content = "Po zavření okna běžet dál v systémové liště" };
+        keepInTray = new ToggleSwitch();
         theme = new ComboBox { MinWidth = 160 };
         foreach (var (key, name) in new[] { ("system", "Podle systému"), ("light", "Světlý"), ("dark", "Tmavý") })
         {
@@ -68,7 +68,7 @@ public sealed class SettingsWindow : Window
                 Dispatcher.UIThread.Post(() => Shell.ApplyTheme(key));
             }
         };
-        var autostart = new CheckBox { Content = "Spouštět po přihlášení" };
+        var autostart = new ToggleSwitch();
         var autostartError = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, IsVisible = false };
         var add = new Button { Content = "Přidat GitLab…" };
         add.Click += (_, _) => _ = Edit(null);
@@ -105,10 +105,22 @@ public sealed class SettingsWindow : Window
 
         var gitLab = new StackPanel { Spacing = 10 };
         gitLab.Children.AddRange([accounts, add]);
-        var refresh = new StackPanel { Spacing = 10 };
-        refresh.Children.AddRange([Field("Interval", interval), keepInTray, autostart, autostartError]);
-        var look = Field("Motiv", theme);
-        var content = new StackPanel { Spacing = 18, Margin = new Thickness(20) };
+        var refresh = new StackPanel { Spacing = 14 };
+        refresh.Children.AddRange([
+            Field("Interval", interval),
+            Switch("Běžet dál v systémové liště", "Po zavření okna se seznam dál obnovuje.", keepInTray),
+            Switch("Spouštět po přihlášení", "Rovnou do lišty, bez okna.", autostart),
+            autostartError,
+        ]);
+        var look = new StackPanel { Spacing = 14 };
+        look.Children.Add(Field("Motiv", theme));
+        if (OperatingSystem.IsLinux())
+        {
+            var systemFrame = new ToggleSwitch { IsChecked = state.SystemFrame };
+            systemFrame.IsCheckedChanged += (_, _) => state.SetSystemFrame(systemFrame.IsChecked == true);
+            look.Children.Add(Switch("Systémový rámeček oken", "Titulek a tlačítka oken od tvého prostředí místo vlastních. Projeví se po novém spuštění.", systemFrame));
+        }
+        var content = new StackPanel { Spacing = 22, Margin = new Thickness(24, 20, 24, 24) };
         sync = new SyncSection(state);
         updates = new UpdatesSection(state, shell.Updater);
         content.Children.AddRange([
@@ -119,16 +131,44 @@ public sealed class SettingsWindow : Window
             Section("Aktualizace", updates),
             quit,
         ]);
-        Content = new ScrollViewer { Content = content, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        Content = WindowChrome.Frame(this, WindowChrome.WithTitleBar(this, Title ?? "",
+            new ScrollViewer { Content = content, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }));
         Update();
     }
 
+    /// A title over a card, like VaultSSH's settings.
     public static Control Section(string title, Control content)
     {
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(Views.SectionTitle(title));
-        panel.Children.Add(new Border { Child = content, Padding = new Thickness(14), CornerRadius = new CornerRadius(10), Background = Paint.Primary(0.04) });
+        panel.Children.Add(new Border
+        {
+            Child = content,
+            Padding = new Thickness(16),
+            CornerRadius = new CornerRadius(10),
+            Background = Paint.Surface,
+            BorderBrush = Paint.Line,
+            BorderThickness = new Thickness(1),
+        });
         return panel;
+    }
+
+    /// A setting that is on or off: what it does on the left, the switch on the right.
+    public static Control Switch(string title, string? detail, ToggleSwitch toggle)
+    {
+        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(Views.Label(title, 13.5, null, FontWeight.Medium));
+        if (detail is not null)
+        {
+            text.Children.Add(new TextBlock { Text = detail, FontSize = 12, Foreground = Paint.Secondary, TextWrapping = TextWrapping.Wrap });
+        }
+        toggle.VerticalAlignment = VerticalAlignment.Center;
+        toggle.Margin = new Thickness(16, 0, 0, 0);
+        ToolTip.SetTip(toggle, title);
+        var row = new DockPanel();
+        DockPanel.SetDock(toggle, Dock.Right);
+        row.Children.AddRange([toggle, text]);
+        return row;
     }
 
     public static Control Field(string label, Control control)
@@ -254,14 +294,14 @@ public sealed class AccountEditor : Window
         var buttons = Views.Row(8, verify, cancel, save);
         DockPanel.SetDock(buttons, Dock.Right);
         footer.Children.AddRange([buttons, status]);
-        var content = new StackPanel { Spacing = 16, Margin = new Thickness(20) };
+        var content = new StackPanel { Spacing = 20, Margin = new Thickness(24, 20, 24, 24) };
         content.Children.AddRange([
             SettingsWindow.Section("Připojení", connection),
             SettingsWindow.Section("Přístup", auth),
             SettingsWindow.Section("Akce", actions),
             footer,
         ]);
-        Content = content;
+        Content = WindowChrome.Frame(this, WindowChrome.WithTitleBar(this, Title, content));
         UpdateButtons();
     }
 

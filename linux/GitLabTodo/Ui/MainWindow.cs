@@ -107,8 +107,8 @@ public sealed class MainWindow : Window
             Views.IconButton(IconKind.ZoomIn, "Přiblížit (Ctrl +)", () => ZoomBy(0.1)),
             Separator());
         var refresh = Views.IconButton(IconKind.Refresh, "Obnovit (F5)", () => _ = state.Refresh());
-        var title = new TextBlock { FontSize = 20, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-        var subtitle = new TextBlock { FontSize = 12.5, Foreground = Paint.Secondary, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
+        var title = new TextBlock { FontSize = 20, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.2, TextTrimming = TextTrimming.CharacterEllipsis };
+        var subtitle = new TextBlock { FontSize = 12.5, Foreground = Paint.Secondary, TextTrimming = TextTrimming.CharacterEllipsis };
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
         titles.Children.AddRange([title, subtitle]);
 
@@ -116,7 +116,8 @@ public sealed class MainWindow : Window
         {
             Child = inspector,
             Width = 340,
-            BorderBrush = Paint.Line,
+            Background = Paint.Sidebar,
+            BorderBrush = Paint.LineSoft,
             BorderThickness = new Thickness(1, 0, 0, 0),
             IsVisible = showsInspector,
         };
@@ -131,18 +132,26 @@ public sealed class MainWindow : Window
             }));
         var switches = Views.Row(8, mode, kind);
         switches.Margin = new Thickness(0, 0, 12, 0);
-        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
+        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };
         Grid.SetColumn(switches, 1);
         Grid.SetColumn(end, 2);
         bar.Children.AddRange([titles, switches, end]);
+        // With the app's own frame the bar is the title bar: it moves the window and has its buttons at the end.
+        if (WindowChrome.Buttons(this) is { } windowButtons)
+        {
+            var buttons = Views.Row(0, Separator(), windowButtons);
+            Grid.SetColumn(buttons, 3);
+            bar.Children.Add(buttons);
+        }
         var toolbar = new Border
         {
             Child = bar,
-            Padding = new Thickness(22, 12, 12, 12),
-            MinHeight = 66,
-            BorderBrush = Paint.Line,
+            Padding = new Thickness(22, 10, 8, 10),
+            MinHeight = 60,
+            BorderBrush = Paint.LineSoft,
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
+        WindowChrome.MakeDraggable(toolbar, this);
 
         var errors = new StackPanel { Spacing = 4 };
         var errorBanner = new Border
@@ -156,10 +165,12 @@ public sealed class MainWindow : Window
         };
         var content = new Panel();
         content.Children.AddRange([orderList, timeline]);
+        // The bar across the list and the detail, as in VaultSSH, so the window's buttons end up in its corner.
         var center = new DockPanel();
         DockPanel.SetDock(toolbar, Dock.Top);
         DockPanel.SetDock(errorBanner, Dock.Top);
-        center.Children.AddRange([toolbar, errorBanner, content]);
+        DockPanel.SetDock(inspectorPane, Dock.Right);
+        center.Children.AddRange([toolbar, errorBanner, inspectorPane, content]);
 
         var sidebar = new Sidebar { Width = 232 };
         sidebar.Picked += tag =>
@@ -168,11 +179,11 @@ public sealed class MainWindow : Window
             ScheduleUpdate();
         };
         sidebar.UpdateClicked += shell.ShowSettings;
+        WindowChrome.MakeDraggable(sidebar.Brand, this);
         var layout = new DockPanel();
         DockPanel.SetDock(sidebar, Dock.Left);
-        DockPanel.SetDock(inspectorPane, Dock.Right);
-        layout.Children.AddRange([sidebar, inspectorPane, center]);
-        Content = layout;
+        layout.Children.AddRange([sidebar, center]);
+        Content = WindowChrome.Frame(this, layout);
         parts = new Parts(sidebar, title, subtitle, mode, kind, zoomControls, zoomLabel, refresh, errors, errorBanner, orderList, timeline, inspector, inspectorPane);
     }
 
@@ -290,7 +301,7 @@ public sealed class MainWindow : Window
         parts.Sidebar.Show(items, filter);
     }
 
-    private static Border Separator() => new() { Width = 1, Height = 20, Background = Paint.Line, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center };
+    private static Border Separator() => new() { Width = 1, Height = 20, Background = Paint.LineSoft, Margin = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center };
 
     private void Select(string id)
     {

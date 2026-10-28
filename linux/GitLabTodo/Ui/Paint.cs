@@ -26,6 +26,12 @@ public static class Paint
     /// Dividers and outlines.
     public static IBrush Line => Brush(Token("AppLineColor"));
 
+    /// Quieter dividers, between rows and under bars.
+    public static IBrush LineSoft => Brush(Token("AppLineSoftColor"));
+
+    /// A picked line in the sidebar, raised a step above it.
+    public static IBrush Selected => Brush(Token("AppSelectedColor"));
+
     /// A color of the current theme from `Look.axaml`.
     private static Color Token(string key) =>
         Application.Current is { } app && app.TryGetResource(key, app.ActualThemeVariant, out var value) && value is Color color

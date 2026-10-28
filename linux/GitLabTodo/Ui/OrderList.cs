@@ -333,7 +333,7 @@ public sealed class OrderList : Panel
 
         private void Update()
         {
-            card.Background = isSelected ? Paint.AccentBrush(Paint.IsDark ? 0.26 : 0.13) : isHovered ? Paint.Primary(0.045) : Brushes.Transparent;
+            card.Background = isSelected ? Paint.AccentBrush(Paint.IsDark ? 0.2 : 0.11) : isHovered ? Paint.Primary(0.045) : Brushes.Transparent;
             if (action is not null && Item.NextStep is { } step)
             {
                 action.IsVisible = step.Action.IsProminent() || isHovered || isSelected;

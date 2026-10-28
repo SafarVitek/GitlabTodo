@@ -13,6 +13,7 @@ using GitLabTodo.Ui;
 
 // The app on sample data, clicked through with a simulated mouse and keyboard and no display: sidebar, list, notes,
 // blocker search, timeline, theme switch and settings. Catches what the logic tests cannot, like a crash in an event.
+// Headless drawing has a stand-in font of its own, so the app's font is left out here.
 AppBuilder.Configure<App>()
     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true })
     .SetupWithoutStarting();
@@ -36,6 +37,8 @@ void Pump()
     }
 }
 
+// The app's own title bars, as on Linux, also when the tests run elsewhere.
+WindowChrome.IsDrawn = true;
 var ui = new DesktopUserInterface();
 var state = new AppState(ui, PreviewData.Snapshot());
 var shell = new Shell(Application.Current!, new ClassicDesktopStyleApplicationLifetime(), state, ui);
@@ -64,6 +67,7 @@ void Drag(Point from, Point to)
 }
 List<Control> Rows() => window.GetVisualDescendants().OfType<Control>().Where(c => c.GetType().Name == "Row" && c.IsEffectivelyVisible).ToList();
 Segmented Mode() => window.GetVisualDescendants().OfType<Segmented>().First();
+IEnumerable<string> Texts(Visual root) => root.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "");
 
 // Every button that is only an icon says what it does in a tooltip.
 void CheckIconTips(Visual root, string where)
@@ -73,6 +77,14 @@ void CheckIconTips(Visual root, string where)
     Check(icons.Count > 0 && silent == 0, $"icon buttons in {where} have tooltips: {icons.Count - silent} of {icons.Count}");
 }
 CheckIconTips(window, "the list");
+
+// Title bar: no system frame, the window's buttons at the end of the top bar.
+Check(window.SystemDecorations == SystemDecorations.None, "the main window draws its own frame");
+Button WindowButton(Window owner, string tip) => owner.GetVisualDescendants().OfType<Button>().First(b => ToolTip.GetTip(b) as string == tip);
+Click(Center(WindowButton(window, "Maximalizovat")));
+Check(window.WindowState == WindowState.Maximized && WindowButton(window, "Obnovit velikost").IsEffectivelyVisible, "maximize maximizes, the button then restores");
+Click(Center(WindowButton(window, "Obnovit velikost")));
+Check(window.WindowState == WindowState.Normal, "restore makes it normal again");
 
 // Sidebar: a click on an entry filters the list. Rebuilding the old list box inside its selection event crashed the app.
 foreach (var (name, count) in new[] { ("backend", 4), ("Čeká", 4), ("infra", 2), ("Vše", 11) })
@@ -225,6 +237,10 @@ Picker("Podle systému").SelectedIndex = 1;
 Pump();
 Check(state.Theme == "light" && Application.Current.ActualThemeVariant == ThemeVariant.Light && Rows().Count == 11, "light theme picked, the window rebuilt for it");
 
+Check(settings.SystemDecorations == SystemDecorations.None && Texts(settings).Contains("Nastavení"), "the settings have their own title bar");
+var switches = settings.GetVisualDescendants().OfType<ToggleSwitch>().ToList();
+Check(switches.Count >= 2, $"on/off settings are switches: {switches.Count}");
+
 // Sync: a GitLab and a repository, applied; „Vypnuto“ turns it off again.
 CheckIconTips(settings, "the settings");
 var syncSection = settings.GetVisualDescendants().OfType<SyncSection>().First();
@@ -248,7 +264,6 @@ Check(state.SyncState is null, "„Vypnuto“ turns syncing off");
 
 // Updates: only an AppImage installs them; others just show their version.
 UpdatesSection Updates(Window owner) => owner.GetVisualDescendants().OfType<UpdatesSection>().First();
-IEnumerable<string> Texts(Visual root) => root.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "");
 Check(Texts(Updates(settings)).Any(t => t.StartsWith($"Verze {Updater.Version}.") && t.Contains("Nix")), "outside an AppImage the settings say how to update");
 Check(!Updates(settings).GetVisualDescendants().OfType<Button>().Any(), "and offer no update button");
 void Offer(string? version)
@@ -271,11 +286,18 @@ Environment.SetEnvironmentVariable("APPIMAGE", image);
 var appImageSettings = new SettingsWindow(state, shell);
 appImageSettings.Show();
 Pump();
-Button UpdateAction() => Updates(appImageSettings).GetVisualDescendants().OfType<Button>().Single(b => b is not CheckBox);
+Button UpdateAction() => Updates(appImageSettings).GetVisualDescendants().OfType<Button>().Single(b => b is not ToggleSwitch);
 Check(UpdateAction().Content as string == "Nainstalovat a restartovat" && Texts(Updates(appImageSettings)).Contains("GitLab Todo 9.9.9 je k dispozici"), "an AppImage offers to install the newer release");
 Offer(null);
 Check(UpdateAction().Content as string == "Zkontrolovat teď" && SidebarUpdate() is null, "without one it offers a check, and the sidebar button goes away");
-appImageSettings.Close();
+var closeButton = WindowButton(appImageSettings, "Zavřít");
+var closePoint = closeButton.TranslatePoint(new Point(closeButton.Bounds.Width / 2, closeButton.Bounds.Height / 2), appImageSettings)!.Value;
+var settingsClosed = false;
+appImageSettings.Closed += (_, _) => settingsClosed = true;
+appImageSettings.MouseDown(closePoint, MouseButton.Left);
+appImageSettings.MouseUp(closePoint, MouseButton.Left);
+Pump();
+Check(settingsClosed, "the close button in the title bar closes the settings");
 Environment.SetEnvironmentVariable("APPIMAGE", null);
 File.Delete(image);
 

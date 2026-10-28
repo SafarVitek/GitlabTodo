@@ -24,7 +24,7 @@ public sealed class UpdatesSection : StackPanel
             Children.Add(Hint($"Verze {Updater.Version}. Tuhle kopii aktualizuješ tak, jak jsi ji nainstaloval (Nix, balíček .deb nebo build ze zdrojáků), ne aplikací samotnou."));
             return;
         }
-        var check = new CheckBox { Content = "Kontrolovat aktualizace při spuštění", IsChecked = state.CheckUpdates };
+        var check = new ToggleSwitch { IsChecked = state.CheckUpdates };
         check.IsCheckedChanged += (_, _) => state.SetCheckUpdates(check.IsChecked == true);
         action.Click += (_, _) => _ = updater.Available is null ? updater.Check() : updater.InstallAndRestart();
         error.Foreground = Paint.Brush(Palette.Threads);
@@ -33,9 +33,9 @@ public sealed class UpdatesSection : StackPanel
         DockPanel.SetDock(action, Dock.Right);
         status.Margin = new Thickness(0, 0, 12, 0);
         row.Children.AddRange([action, status]);
+        Spacing = 14;
         Children.AddRange([
-            check,
-            Hint($"Verze {Updater.Version}. Nové verze se stahují z GitHubu a nainstalují se, jen když mají podpis vydání GitLab Todo. Nic se neinstaluje bez tvého kliknutí."),
+            SettingsWindow.Switch("Kontrolovat aktualizace", $"Verze {Updater.Version}. Nové verze se stahují z GitHubu a nainstalují se, jen když mají podpis vydání GitLab Todo, a nikdy bez tvého kliknutí.", check),
             row,
             notes,
             error,

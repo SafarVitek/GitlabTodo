@@ -22,3 +22,10 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
+
+## IBM Plex Sans
+
+The Linux app's text is set in [IBM Plex Sans](https://github.com/IBM/plex) 1.1.0 (Regular, Medium, SemiBold, Bold),
+embedded from `linux/GitLabTodo/Assets/Fonts`. Copyright © 2017 IBM Corp. with Reserved Font Name "Plex", licensed
+under the SIL Open Font License 1.1; the full license is in
+[`linux/GitLabTodo/Assets/Fonts/OFL.txt`](linux/GitLabTodo/Assets/Fonts/OFL.txt) and ships inside the app.

@@ -20,11 +20,6 @@
     "hash": "sha256-exGUplIWkvYlQHInN1H+zbA0iqDL5klSJ2+2AtsOXV4="
   },
   {
-    "pname": "Avalonia.Fonts.Inter",
-    "version": "11.3.22",
-    "hash": "sha256-vF8ooh0KJDUH/u9Ap2kxGoy0byiNvS2FOxsz37O1Sf0="
-  },
-  {
     "pname": "Avalonia.FreeDesktop",
     "version": "11.3.22",
     "hash": "sha256-GVTGsjJxJZysevISUqey0L4mA6junygbYf0ikPWDoSU="

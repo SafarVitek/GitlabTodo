@@ -45,6 +45,9 @@ public enum IconKind
     Power,
     Repository,
     Download,
+    Minimize,
+    Maximize,
+    Restore,
 }
 
 /// Interface icons from Lucide; the filled status marks, the merge glyph and the check boxes are drawn here on a
@@ -82,6 +85,9 @@ public static class Icons
         [IconKind.Power] = "power",
         [IconKind.Repository] = "folder-git-2",
         [IconKind.Download] = "download",
+        [IconKind.Minimize] = "minus",
+        [IconKind.Maximize] = "window-maximize",
+        [IconKind.Restore] = "window-restore",
     };
 
     public static void Draw(DrawingContext context, IconKind kind, Rect rect, IBrush brush, IBrush? contrast = null)

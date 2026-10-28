@@ -106,6 +106,7 @@ public sealed class AppState
     public double TimelineZoom => settings.TimelineZoom;
     public string Theme => settings.Theme;
     public bool CheckUpdates => settings.CheckUpdates;
+    public bool SystemFrame => settings.SystemFrame;
 
     public string? Token(Guid accountId) => tokens.GetValueOrDefault(accountId);
 
@@ -1219,6 +1220,14 @@ public sealed class AppState
     public void SetCheckUpdates(bool check)
     {
         settings.CheckUpdates = check;
+        SaveSettings();
+        Changed?.Invoke();
+    }
+
+    /// Used from the next launch on, the windows are made with their frame.
+    public void SetSystemFrame(bool system)
+    {
+        settings.SystemFrame = system;
         SaveSettings();
         Changed?.Invoke();
     }

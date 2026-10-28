@@ -57,7 +57,10 @@ public sealed class MessageDialog : Window
         body.Children.Add(row);
         body.Children.Add(icon);
         body.Children.Add(text);
-        Content = body;
+        // Without a system title bar the whole dialog moves it; Escape or a button closes it.
+        var surface = new Border { Child = body };
+        WindowChrome.MakeDraggable(surface, this);
+        Content = WindowChrome.Frame(this, surface);
 
         KeyDown += (_, e) =>
         {

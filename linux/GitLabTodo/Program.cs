@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
+using Avalonia.Media.Fonts;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using GitLabTodo.Core;
@@ -10,7 +11,7 @@ using GitLabTodo.Ui;
 
 namespace GitLabTodo;
 
-internal static class Program
+public static class Program
 {
     /// `--hidden` starts in the tray (for autostart), `--preview` shows sample data and touches nothing.
     [STAThread]
@@ -25,11 +26,14 @@ internal static class Program
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
     }
 
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
-        .UsePlatformDetect()
-        .WithInterFont()
-        .With(new FontManagerOptions { DefaultFamilyName = "fonts:Inter#Inter" })
-        .LogToTrace();
+    public static AppBuilder BuildAvaloniaApp() => WithAppFont(AppBuilder.Configure<App>().UsePlatformDetect()).LogToTrace();
+
+    /// IBM Plex Sans from the app's assets, like VaultSSH, so the text looks the same on every desktop.
+    public static AppBuilder WithAppFont(AppBuilder builder) => builder
+        .ConfigureFonts(fonts => fonts.AddFontCollection(new EmbeddedFontCollection(
+            new Uri("fonts:App", UriKind.Absolute),
+            new Uri("avares://gitlab-todo/Assets/Fonts", UriKind.Absolute))))
+        .With(new FontManagerOptions { DefaultFamilyName = "fonts:App#IBM Plex Sans" });
 }
 
 public sealed class App : Application
@@ -58,6 +62,7 @@ public sealed class App : Application
             var ui = new DesktopUserInterface();
             var state = isPreview ? new AppState(ui, PreviewData.Snapshot()) : new AppState(ui);
             Shell.ApplyTheme(state.Theme);
+            WindowChrome.IsDrawn = OperatingSystem.IsLinux() && !state.SystemFrame;
             new Shell(this, desktop, state, ui).Start(showsWindow: !args.Contains("--hidden"), isPreview: isPreview);
         }
         base.OnFrameworkInitializationCompleted();

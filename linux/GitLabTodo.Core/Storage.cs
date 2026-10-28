@@ -66,6 +66,8 @@ public sealed class Settings
     public string Theme { get; set; } = "system";
     /// Looks for a newer release at launch, where the app can update itself.
     public bool CheckUpdates { get; set; } = true;
+    /// The desktop's own window frames instead of the app's title bars.
+    public bool SystemFrame { get; set; }
 }
 
 /// Files under the XDG folders: settings and tokens in `~/.config/gitlab-todo`, the plan and the last refresh in

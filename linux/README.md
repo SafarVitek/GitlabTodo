@@ -16,6 +16,9 @@ liště s tím, co je na řadě. Instalace (AppImage, .deb, Nix) a aktualizace j
 - Poznámky k položce (třeba zápis z meetingu) jsou v detailu, úkoly se píšou jako `- [ ] text` a odškrtávají
   se rovnou v náhledu. Klik na položku v nabídce v liště otevře poznámku k psaní.
 - F5 nebo Ctrl R obnoví data, Ctrl , otevře nastavení, Ctrl Q aplikaci ukončí i z lišty.
+- Okna mají vlastní titulek, stejně jako VaultSSH: okno posuneš tažením horní lišty (nebo loga vlevo nahoře),
+  dvojklik ho maximalizuje, velikost měníš za okraje. Kdo chce rámeček svého prostředí, zapne v nastavení
+  Vzhled → Systémový rámeček oken (projeví se po novém spuštění).
 
 ## Data
 

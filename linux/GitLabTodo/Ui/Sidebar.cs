@@ -19,17 +19,17 @@ public sealed class Sidebar : Border
     private readonly List<Entry> entries = [];
     private readonly TextBlock status = new() { FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly Spinner spinner = new(12) { IsVisible = false, Margin = new Thickness(0, 0, 6, 0) };
+    /// Like the other lines, in the accent color, as VaultSSH shows its update.
     private readonly Button update = new()
     {
-        Background = Paint.AccentBrush(),
-        Foreground = Brushes.White,
-        Padding = new Thickness(10, 7),
-        CornerRadius = new CornerRadius(8),
-        Margin = new Thickness(10, 0, 10, 10),
+        Padding = new Thickness(10, 0),
+        Height = 34,
+        CornerRadius = new CornerRadius(7),
+        Margin = new Thickness(8, 0, 8, 8),
         HorizontalAlignment = HorizontalAlignment.Stretch,
-        HorizontalContentAlignment = HorizontalAlignment.Center,
+        HorizontalContentAlignment = HorizontalAlignment.Left,
         IsVisible = false,
-        Classes = { "filled" },
+        Classes = { "subtle" },
     };
     private IReadOnlyList<SidebarItem> shown = [];
     private string? updateVersion;
@@ -38,16 +38,18 @@ public sealed class Sidebar : Border
     public Sidebar()
     {
         Background = Paint.Sidebar;
-        BorderBrush = Paint.Line;
+        BorderBrush = Paint.LineSoft;
         BorderThickness = new Thickness(0, 0, 1, 0);
         var logo = new Image
         {
             Source = new Bitmap(AssetLoader.Open(new Uri("avares://gitlab-todo/Assets/icon.png"))),
-            Width = 22,
-            Height = 22,
+            Width = 28,
+            Height = 28,
         };
-        var title = Views.Row(9, logo, Views.Label("GitLab Todo", 14, Paint.Primary(), FontWeight.SemiBold));
-        title.Margin = new Thickness(18, 16, 12, 14);
+        var name = Views.Label("GitLab Todo", 15, Paint.Primary(), FontWeight.SemiBold);
+        name.LetterSpacing = -0.15;
+        var title = new Border { Child = Views.Row(10, logo, name), Padding = new Thickness(16, 16, 12, 18) };
+        Brand = title;
         var footerLine = new DockPanel();
         DockPanel.SetDock(spinner, Dock.Left);
         footerLine.Children.AddRange([spinner, status]);
@@ -55,7 +57,7 @@ public sealed class Sidebar : Border
         {
             Child = footerLine,
             Padding = new Thickness(18, 10),
-            BorderBrush = Paint.Line,
+            BorderBrush = Paint.LineSoft,
             BorderThickness = new Thickness(0, 1, 0, 0),
         };
         status.Foreground = Paint.Secondary;
@@ -71,6 +73,9 @@ public sealed class Sidebar : Border
 
     public event Action<object>? Picked;
 
+    /// The logo and name at the top, which move the window when the app draws its frame.
+    public Control Brand { get; }
+
     public event Action? UpdateClicked;
 
     /// A newer release above the footer, like VaultSSH does it; a click opens the settings to install it.
@@ -82,7 +87,9 @@ public sealed class Sidebar : Border
             return;
         }
         updateVersion = version;
-        update.Content = Views.Row(7, new Icon(IconKind.Download, Brushes.White, 14), Views.Label($"Aktualizovat na {version}", 13, Brushes.White, FontWeight.SemiBold));
+        var row = Views.Row(10, new Icon(IconKind.Download, Paint.AccentBrush(), 16), Views.Label($"Aktualizovat na {version}", 13.5, Paint.AccentBrush(), FontWeight.Medium));
+        row.Margin = new Thickness(1, 0, 0, 0);
+        update.Content = row;
         ToolTip.SetTip(update, $"GitLab Todo {version} je k dispozici. Instalace je v nastavení.");
     }
 
@@ -107,8 +114,8 @@ public sealed class Sidebar : Border
             {
                 if (item.Tag is null)
                 {
-                    var section = Views.Label(item.Name, 11.5, Paint.Tertiary, FontWeight.SemiBold);
-                    section.Margin = new Thickness(10, 14, 0, 4);
+                    var section = Views.Label(item.Name, 12.5, Paint.Tertiary, FontWeight.Medium);
+                    section.Margin = new Thickness(10, 16, 0, 5);
                     lines.Children.Add(section);
                     continue;
                 }
@@ -136,6 +143,8 @@ public sealed class Sidebar : Border
 
     private sealed class Entry : Border
     {
+        private static readonly BoxShadows Marked = BoxShadows.Parse("inset 2 0 0 0 #0A84FF");
+
         private readonly TextBlock name;
         private readonly TextBlock count;
         private bool isSelected;
@@ -146,11 +155,11 @@ public sealed class Sidebar : Border
             Item = item;
             CornerRadius = new CornerRadius(7);
             Padding = new Thickness(10, 0);
-            Height = 32;
+            Height = 34;
             Cursor = new Cursor(StandardCursorType.Hand);
-            name = Views.Label(item.Name, 13.5);
-            count = Views.Label(item.Count.ToString(), 12, Paint.Secondary);
-            var icon = new Panel { Width = 18, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center };
+            name = Views.Label(item.Name, 13.5, null, FontWeight.Medium);
+            count = Views.Label(item.Count.ToString(), 12, Paint.Tertiary);
+            var icon = new Panel { Width = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
             if (item.Icon?.Invoke() is { } image)
             {
                 image.HorizontalAlignment = HorizontalAlignment.Center;
@@ -194,12 +203,13 @@ public sealed class Sidebar : Border
             }
         }
 
+        /// Muted until picked or under the pointer; the picked one raised with the accent along its left edge.
         private void Update()
         {
-            Background = isSelected ? Paint.AccentBrush(Paint.IsDark ? 0.26 : 0.13) : isHovered ? Paint.Primary(0.05) : Brushes.Transparent;
-            name.FontWeight = isSelected ? FontWeight.SemiBold : FontWeight.Normal;
-            name.Foreground = isSelected && !Paint.IsDark ? Paint.Brush("#0060DF") : Paint.Primary();
-            count.Foreground = isSelected ? name.Foreground : Paint.Secondary;
+            Background = isSelected || isHovered ? Paint.Selected : Brushes.Transparent;
+            BoxShadow = isSelected ? Marked : default;
+            name.Foreground = isSelected || isHovered ? Paint.Primary() : Paint.Primary(0.72);
+            count.Foreground = isSelected ? Paint.Secondary : Paint.Tertiary;
         }
     }
 }

@@ -117,5 +117,6 @@ nic nezveřejní.
 
 ## Licence
 
-[MIT](LICENSE). Ikony linuxové verze jsou z [Lucide](https://lucide.dev) (ISC), viz
+[MIT](LICENSE). Ikony linuxové verze jsou z [Lucide](https://lucide.dev) (ISC), písmo je
+[IBM Plex Sans](https://github.com/IBM/plex) (SIL Open Font License), viz
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

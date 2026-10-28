@@ -112,8 +112,6 @@ public sealed class Spinner : Control
 /// Mutually exclusive buttons in one rounded group, like a segmented picker.
 public sealed class Segmented : Border
 {
-    private static readonly BoxShadows Lifted = BoxShadows.Parse("0 1 3 0 #30000000");
-
     private readonly List<Border> segments = [];
     private int selected;
     private int? hovered;
@@ -121,8 +119,10 @@ public sealed class Segmented : Border
     public Segmented(IReadOnlyList<Control> contents, int selected = 0)
     {
         this.selected = selected;
-        CornerRadius = new CornerRadius(7);
-        Background = Paint.Primary(0.07);
+        CornerRadius = new CornerRadius(8);
+        Background = Paint.Background;
+        BorderBrush = Paint.Line;
+        BorderThickness = new Thickness(1);
         Padding = new Thickness(2);
         VerticalAlignment = VerticalAlignment.Center;
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
@@ -134,7 +134,7 @@ public sealed class Segmented : Border
                 Child = contents[index],
                 Padding = new Thickness(11, 3),
                 MinHeight = 24,
-                CornerRadius = new CornerRadius(5),
+                CornerRadius = new CornerRadius(6),
                 Cursor = new Cursor(StandardCursorType.Hand),
             };
             segment.PointerPressed += (_, e) =>
@@ -185,14 +185,15 @@ public sealed class Segmented : Border
         }
     }
 
-    /// The picked segment raised like a card, the one under the pointer slightly shaded.
+    /// The picked segment raised, the others muted until the pointer is over them.
     private void Update()
     {
         for (var position = 0; position < segments.Count; position++)
         {
             var isSelected = position == selected;
-            segments[position].Background = isSelected ? (Paint.IsDark ? Paint.Primary(0.16) : Paint.Background) : position == hovered && IsEnabled ? Paint.Primary(0.05) : Brushes.Transparent;
-            segments[position].BoxShadow = isSelected ? Lifted : default;
+            var isHovered = position == hovered && IsEnabled;
+            segments[position].Background = isSelected ? Paint.Selected : isHovered ? Paint.Primary(0.05) : Brushes.Transparent;
+            segments[position].Child!.Opacity = isSelected || isHovered ? 1 : 0.68;
         }
     }
 }
@@ -401,22 +402,24 @@ public static class Views
     }
 
     /// Rounded background for fields and cards in the inspector.
+    /// Set into the surface around it, like a field.
     public static Border Box(Control child) => new()
     {
         Child = child,
         Padding = new Thickness(12, 10),
         CornerRadius = new CornerRadius(9),
-        Background = Paint.Surface,
+        Background = Paint.Background,
+        BorderBrush = Paint.LineSoft,
+        BorderThickness = new Thickness(1),
     };
 
-    /// Small capitals above a section, quieter than the content under them.
+    /// Above a section, quieter than the content under it.
     public static TextBlock SectionTitle(string title) => new()
     {
-        Text = title.ToUpperInvariant(),
-        FontSize = 11,
+        Text = title,
+        FontSize = 13,
         FontWeight = FontWeight.SemiBold,
-        LetterSpacing = 0.6,
-        Foreground = Paint.Tertiary,
+        Foreground = Paint.Secondary,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
