@@ -103,6 +103,12 @@ jobs:
           xcodegen generate --quiet
           xcodebuild -project GitLabTodo.xcodeproj -scheme GitLabTodo -configuration Release \
             -destination 'generic/platform=macOS' -derivedDataPath build -quiet build
+          expected=$(sed -n 's/^ *MARKETING_VERSION: "\(.*\)"/\1/p' project.yml)
+          built=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/Build/Products/Release/GitLabTodo.app/Contents/Info.plist)
+          if [ "$built" != "$expected" ]; then
+            echo "::error::The app says version $built, project.yml $expected"
+            exit 1
+          fi
           mkdir -p ../dist
           ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Release/GitLabTodo.app ../dist/GitLabTodo-macOS.zip
 

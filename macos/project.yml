@@ -27,6 +27,9 @@ targets:
       properties:
         CFBundleDisplayName: GitLab Todo
         CFBundleLocalizations: [cs]
+        # From MARKETING_VERSION above, which the release workflow checks against the tag.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
         LSUIElement: true
         CFBundleURLTypes:
@@ -45,6 +48,8 @@ targets:
       properties:
         CFBundleDisplayName: GitLab Todo
         CFBundleLocalizations: [cs]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
