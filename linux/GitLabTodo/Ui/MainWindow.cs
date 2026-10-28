@@ -45,6 +45,7 @@ public sealed class MainWindow : Window
 
         BuildContent();
         state.Changed += ScheduleUpdate;
+        shell.Updater.Changed += ScheduleUpdate;
         // Colors are taken when controls are made, a new theme needs new ones.
         ActualThemeVariantChanged += (_, _) =>
         {
@@ -166,6 +167,7 @@ public sealed class MainWindow : Window
             filter = (Filter)tag;
             ScheduleUpdate();
         };
+        sidebar.UpdateClicked += shell.ShowSettings;
         var layout = new DockPanel();
         DockPanel.SetDock(sidebar, Dock.Left);
         DockPanel.SetDock(inspectorPane, Dock.Right);
@@ -236,6 +238,7 @@ public sealed class MainWindow : Window
             state.IsRefreshing ? "Obnovuji…" : state.LastRefresh is { } refreshed ? $"Aktualizováno {Views.Relative(refreshed)}" : "Zatím neaktualizováno",
             state.IsRefreshing);
         parts.Refresh.IsEnabled = !state.IsRefreshing;
+        parts.Sidebar.ShowUpdate(shell.Updater.Available?.Version);
 
         var failing = state.Accounts.Where(a => state.AccountErrors.ContainsKey(a.Id)).ToList();
         parts.Errors.Children.Clear();

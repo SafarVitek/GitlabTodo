@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=GitLab Todo
+Comment=Issues a merge requesty z GitLabu v pořadí, ve kterém na nich chceš pracovat
+Exec=gitlab-todo
+Icon=gitlab-todo
+Terminal=false
+Categories=Development;ProjectManagement;
+Keywords=gitlab;todo;merge request;

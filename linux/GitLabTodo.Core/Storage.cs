@@ -64,6 +64,8 @@ public sealed class Settings
     public bool KeepInTray { get; set; } = true;
     /// `system`, `light` or `dark`.
     public string Theme { get; set; } = "system";
+    /// Looks for a newer release at launch, where the app can update itself.
+    public bool CheckUpdates { get; set; } = true;
 }
 
 /// Files under the XDG folders: settings and tokens in `~/.config/gitlab-todo`, the plan and the last refresh in

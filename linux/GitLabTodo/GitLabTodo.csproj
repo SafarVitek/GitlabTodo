@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>gitlab-todo</AssemblyName>
     <RootNamespace>GitLabTodo</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <!-- Czech texts and dates are formatted by the app itself, no ICU needed. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>

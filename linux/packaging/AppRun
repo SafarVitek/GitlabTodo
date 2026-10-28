@@ -1,0 +1,4 @@
+#!/bin/sh
+# The AppImage's entry point: the app from the mounted image, with the arguments it was started with.
+here=$(dirname "$(readlink -f "$0")")
+exec "$here/usr/lib/gitlab-todo/gitlab-todo" "$@"

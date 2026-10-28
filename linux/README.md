@@ -2,7 +2,8 @@
 
 Avalonia (.NET 10) aplikace se stejnými funkcemi jako macOS verze, jen bez widgetu: seznam „Pořadí“
 s přetahováním, timeline s vazbami a odklady, detail položky, akce „+ MR“ a „Ready“ a ikona v systémové
-liště s tím, co je na řadě. Instalace přes Nix je popsaná v [README v kořeni](../README.md).
+liště s tím, co je na řadě. Instalace (AppImage, .deb, Nix) a aktualizace jsou popsané v
+[README v kořeni](../README.md#linux).
 
 ## Ovládání
 
@@ -30,6 +31,11 @@ liště s tím, co je na řadě. Instalace přes Nix je popsaná v [README v ko�
 Spouštění po přihlášení zapíná nastavení, zapíše `~/.config/autostart/gitlab-todo.desktop` a aplikace
 pak startuje rovnou do lišty.
 
+AppImage si při spuštění zapíše položku do menu aplikací `~/.local/share/applications/gitlab-todo-appimage.desktop`
+a ikonu do `~/.local/share/icons`. Položka ukazuje na soubor AppImage, takže po jeho přesunutí stačí spustit ho
+jednou z nového místa. Aktualizace se stahuje vedle něj a pak ho nahradí, složka s AppImage proto musí být
+zapisovatelná (třeba `~/Applications`, ne `/opt`).
+
 ## Systémová lišta
 
 Ikona v liště používá StatusNotifierItem. KDE, Xfce, Cinnamon a většina panelů ho umí, GNOME potřebuje
@@ -46,6 +52,7 @@ dotnet run --project linux/GitLabTodo -- --preview   # s ukázkovými daty, nic 
 dotnet run --project linux/Tests              # testy logiky
 dotnet run --project linux/UiTests            # UI proklikané bez displeje
 nix build .#gitlab-todo                       # balíček
+linux/packaging/build.sh dist                 # AppImage a .deb (na x86-64 Linuxu s .NET 10 SDK a dpkg-deb)
 ```
 
 Po změně NuGet balíčků je potřeba obnovit `deps.json` pro Nix:
@@ -67,3 +74,4 @@ Runtime balíčky .NET se vynechávají, ty dodává SDK z nixpkgs.
 - `Tests/`: testy logiky jako konzolový program, stejné scénáře jako testy macOS verze.
 - `UiTests/`: aplikace na ukázkových datech proklikaná simulovanou myší a klávesnicí bez displeje.
 - `package.nix`: balíček pro nixpkgs, použitý z `flake.nix` v kořeni.
+- `packaging/`: sestavení AppImage a .deb pro vydání, spouští ho `.github/workflows/release.yml`.

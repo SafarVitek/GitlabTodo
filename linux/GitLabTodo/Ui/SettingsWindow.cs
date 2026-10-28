@@ -17,6 +17,7 @@ public sealed class SettingsWindow : Window
     private CheckBox keepInTray = null!;
     private ComboBox theme = null!;
     private SyncSection sync = null!;
+    private UpdatesSection updates = null!;
 
     public SettingsWindow(AppState state, Shell shell)
     {
@@ -32,7 +33,20 @@ public sealed class SettingsWindow : Window
         // Colors are taken when controls are made, a new theme needs new ones.
         ActualThemeVariantChanged += (_, _) => BuildContent();
         state.Changed += ScheduleUpdate;
-        Closed += (_, _) => state.Changed -= ScheduleUpdate;
+        shell.Updater.Changed += ScheduleUpdate;
+        Closed += (_, _) =>
+        {
+            state.Changed -= ScheduleUpdate;
+            shell.Updater.Changed -= ScheduleUpdate;
+        };
+        // Taller than a small screen with every section, so it scrolls there.
+        Opened += (_, _) =>
+        {
+            if (Screens.ScreenFromVisual(this) is { } screen)
+            {
+                MaxHeight = screen.WorkingArea.Height / screen.Scaling - 60;
+            }
+        };
     }
 
     private void BuildContent()
@@ -96,8 +110,16 @@ public sealed class SettingsWindow : Window
         var look = Field("Motiv", theme);
         var content = new StackPanel { Spacing = 18, Margin = new Thickness(20) };
         sync = new SyncSection(state);
-        content.Children.AddRange([Section("GitLab", gitLab), Section("Synchronizace", sync), Section("Obnovování", refresh), Section("Vzhled", look), quit]);
-        Content = content;
+        updates = new UpdatesSection(state, shell.Updater);
+        content.Children.AddRange([
+            Section("GitLab", gitLab),
+            Section("Synchronizace", sync),
+            Section("Obnovování", refresh),
+            Section("Vzhled", look),
+            Section("Aktualizace", updates),
+            quit,
+        ]);
+        Content = new ScrollViewer { Content = content, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         Update();
     }
 
@@ -136,6 +158,7 @@ public sealed class SettingsWindow : Window
         keepInTray.IsChecked = state.KeepInTray;
         theme.SelectedItem = theme.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag! == state.Theme) ?? theme.Items[0];
         sync.Update();
+        updates.Update();
     }
 
     private Control AccountRow(GitLabAccount account)

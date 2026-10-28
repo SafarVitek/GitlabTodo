@@ -19,7 +19,20 @@ public sealed class Sidebar : Border
     private readonly List<Entry> entries = [];
     private readonly TextBlock status = new() { FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly Spinner spinner = new(12) { IsVisible = false, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button update = new()
+    {
+        Background = Paint.AccentBrush(),
+        Foreground = Brushes.White,
+        Padding = new Thickness(10, 7),
+        CornerRadius = new CornerRadius(8),
+        Margin = new Thickness(10, 0, 10, 10),
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        HorizontalContentAlignment = HorizontalAlignment.Center,
+        IsVisible = false,
+        Classes = { "filled" },
+    };
     private IReadOnlyList<SidebarItem> shown = [];
+    private string? updateVersion;
     private object? selected;
 
     public Sidebar()
@@ -46,15 +59,32 @@ public sealed class Sidebar : Border
             BorderThickness = new Thickness(0, 1, 0, 0),
         };
         status.Foreground = Paint.Secondary;
+        update.Click += (_, _) => UpdateClicked?.Invoke();
         var content = new DockPanel();
         DockPanel.SetDock(title, Dock.Top);
         DockPanel.SetDock(footer, Dock.Bottom);
-        content.Children.AddRange([title, footer]);
+        DockPanel.SetDock(update, Dock.Bottom);
+        content.Children.AddRange([title, footer, update]);
         content.Children.Add(new ScrollViewer { Content = lines, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
         Child = content;
     }
 
     public event Action<object>? Picked;
+
+    public event Action? UpdateClicked;
+
+    /// A newer release above the footer, like VaultSSH does it; a click opens the settings to install it.
+    public void ShowUpdate(string? version)
+    {
+        update.IsVisible = version is not null;
+        if (version is null || version == updateVersion)
+        {
+            return;
+        }
+        updateVersion = version;
+        update.Content = Views.Row(7, new Icon(IconKind.Download, Brushes.White, 14), Views.Label($"Aktualizovat na {version}", 13, Brushes.White, FontWeight.SemiBold));
+        ToolTip.SetTip(update, $"GitLab Todo {version} je k dispozici. Instalace je v nastavení.");
+    }
 
     /// When the list was refreshed, or that it is being refreshed right now.
     public void ShowStatus(string text, bool isBusy)

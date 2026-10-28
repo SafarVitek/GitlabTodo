@@ -323,6 +323,22 @@ var macPlan = PlanSync.Translate(macDocument.Plan, new Dictionary<string, string
 Check(macPlan.Order.Single() == SyncId(deviceA, 7) && macPlan.Notes[SyncId(deviceA, 7)].Tasks.Single().IsDone && macPlan.Delays[SyncId(deviceA, 7)] == 2,
     "a file written by the macOS app reads on Linux");
 
+// Updates: versions, the manifest, and signatures made by OpenSSL with the release key in GitHub Actions.
+Check(Updates.IsNewer("0.2.0", "0.1.0") && Updates.IsNewer("0.10.0", "0.9.3") && !Updates.IsNewer("0.1.0", "0.1.0") && !Updates.IsNewer("0.1.9", "0.2.0")
+    && Updates.IsNewer("1.0.0-beta.1", "0.9.0") && !Updates.IsNewer("0.2.0", "0.2.0+abc123"), "release versions compare by number");
+var manifest = JsonSerializer.Deserialize<UpdateManifest>("""
+    {"version": "0.3.0", "notes": "Release notes: x", "pub_date": "2026-10-28T12:00:00Z",
+     "platforms": {"linux-x86_64": {"url": "https://example.com/GitLabTodo-0.3.0-x86_64.AppImage", "signature": "AAEC"}}}
+    """, Storage.Json)!;
+Check(Updates.Pick(manifest, "0.2.0", "linux-x86_64") is { Version: "0.3.0", Url: "https://example.com/GitLabTodo-0.3.0-x86_64.AppImage" } update && update.Signature.Length == 3,
+    "a newer release for this platform is offered");
+Check(Updates.Pick(manifest, "0.3.0", "linux-x86_64") is null && Updates.Pick(manifest, "0.2.0", "linux-aarch64") is null, "not the same version, not another platform");
+var signed = System.Text.Encoding.UTF8.GetBytes("GitLab Todo update test");
+var releaseSignature = Convert.FromBase64String("MEQCIC4O8+icZkKTTMjPcPb5Y9CBMywNr7AsRsmqtv2v700AAiAlLXAlVuxB4A43HitGhf8z/RvXnydrhaafwbeosB9pOA==");
+Check(Updates.Verify(new MemoryStream(signed), releaseSignature), "a file signed with the release key verifies");
+signed[0] ^= 1;
+Check(!Updates.Verify(new MemoryStream(signed), releaseSignature), "a changed file does not");
+
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");
 return failures == 0 ? 0 : 1;
 

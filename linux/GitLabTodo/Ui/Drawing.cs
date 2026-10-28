@@ -44,6 +44,7 @@ public enum IconKind
     CheckboxChecked,
     Power,
     Repository,
+    Download,
 }
 
 /// Interface icons from Lucide; the filled status marks, the merge glyph and the check boxes are drawn here on a
@@ -80,6 +81,7 @@ public static class Icons
         [IconKind.Checklist] = "list-checks",
         [IconKind.Power] = "power",
         [IconKind.Repository] = "folder-git-2",
+        [IconKind.Download] = "download",
     };
 
     public static void Draw(DrawingContext context, IconKind kind, Rect rect, IBrush brush, IBrush? contrast = null)

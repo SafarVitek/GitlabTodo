@@ -39,11 +39,16 @@ public static class Autostart
             """);
     }
 
-    /// Installed with Nix, the store path changes with every update, the command on the PATH stays.
+    /// An AppImage runs from a mount that changes with every start, the file itself stays. Installed with Nix, the
+    /// store path changes with every update, the command on the PATH stays.
     private static string Command
     {
         get
         {
+            if (AppImage.Path is { } image)
+            {
+                return $"\"{image}\"";
+            }
             var path = Environment.ProcessPath ?? "gitlab-todo";
             return path.StartsWith("/nix/store/", StringComparison.Ordinal) ? "gitlab-todo" : $"\"{path}\"";
         }

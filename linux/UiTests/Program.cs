@@ -1,3 +1,4 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -244,6 +245,39 @@ Check(state.SyncState?.Settings.Project == "me/gitlab-todo-data", $"sync set to 
 gitLabPicker.SelectedIndex = 0;
 Pump();
 Check(state.SyncState is null, "„Vypnuto“ turns syncing off");
+
+// Updates: only an AppImage installs them; others just show their version.
+UpdatesSection Updates(Window owner) => owner.GetVisualDescendants().OfType<UpdatesSection>().First();
+IEnumerable<string> Texts(Visual root) => root.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "");
+Check(Texts(Updates(settings)).Any(t => t.StartsWith($"Verze {Updater.Version}.") && t.Contains("Nix")), "outside an AppImage the settings say how to update");
+Check(!Updates(settings).GetVisualDescendants().OfType<Button>().Any(), "and offer no update button");
+void Offer(string? version)
+{
+    typeof(Updater).GetProperty(nameof(Updater.Available))!.SetValue(shell.Updater, version is null ? null : new AvailableUpdate(version, null, "https://example.invalid/update", []));
+    (typeof(Updater).GetField(nameof(Updater.Changed), BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(shell.Updater) as Action)?.Invoke();
+    Pump();
+}
+Button? SidebarUpdate() => window.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.IsEffectivelyVisible
+    && b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text?.StartsWith("Aktualizovat na") == true));
+Check(SidebarUpdate() is null, "no update button in the sidebar without a newer release");
+Offer("9.9.9");
+Check(SidebarUpdate() is { } offered && Texts(offered).Contains("Aktualizovat na 9.9.9"), "a newer release shows „Aktualizovat na 9.9.9“ in the sidebar");
+CheckIconTips(window, "the main window with an update");
+Click(Center(SidebarUpdate()!));
+Check(typeof(Shell).GetField("settings", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(shell) is SettingsWindow, "the sidebar button opens the settings");
+var image = Path.Combine(Path.GetTempPath(), $"gitlab-todo-uitest-{Environment.ProcessId}.AppImage");
+File.WriteAllText(image, "");
+Environment.SetEnvironmentVariable("APPIMAGE", image);
+var appImageSettings = new SettingsWindow(state, shell);
+appImageSettings.Show();
+Pump();
+Button UpdateAction() => Updates(appImageSettings).GetVisualDescendants().OfType<Button>().Single(b => b is not CheckBox);
+Check(UpdateAction().Content as string == "Nainstalovat a restartovat" && Texts(Updates(appImageSettings)).Contains("GitLab Todo 9.9.9 je k dispozici"), "an AppImage offers to install the newer release");
+Offer(null);
+Check(UpdateAction().Content as string == "Zkontrolovat teď" && SidebarUpdate() is null, "without one it offers a check, and the sidebar button goes away");
+appImageSettings.Close();
+Environment.SetEnvironmentVariable("APPIMAGE", null);
+File.Delete(image);
 
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");
 return failures == 0 ? 0 : 1;

@@ -58,7 +58,7 @@ public sealed class App : Application
             var ui = new DesktopUserInterface();
             var state = isPreview ? new AppState(ui, PreviewData.Snapshot()) : new AppState(ui);
             Shell.ApplyTheme(state.Theme);
-            new Shell(this, desktop, state, ui).Start(showsWindow: !args.Contains("--hidden"), listens: !isPreview);
+            new Shell(this, desktop, state, ui).Start(showsWindow: !args.Contains("--hidden"), isPreview: isPreview);
         }
         base.OnFrameworkInitializationCompleted();
     }

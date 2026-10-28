@@ -3,7 +3,8 @@
 Osobní seznam práce nad GitLabem. Ukazuje issue a merge requesty, které máš přiřazené, a merge requesty,
 ve kterých jsi zmíněný, z jednoho nebo více GitLabů (i self-hosted). Pořadí, ve kterém na nich chceš
 pracovat, si nastavíš přetahováním. Timeline pak ukáže, co přijde kdy a co na co čeká, i napříč projekty
-a GitLaby. Pořadí, vazby a odklady se drží jen u tebe na počítači, do GitLabu se nezapisují.
+a GitLaby. Pořadí, vazby a odklady se drží u tebe na počítači a do issue ani MR se nezapisují. Mezi
+počítači je můžeš synchronizovat přes soukromý repozitář.
 
 Aplikace je ve dvou verzích se stejnými funkcemi a stejným formátem dat:
 
@@ -13,7 +14,8 @@ Aplikace je ve dvou verzích se stejnými funkcemi a stejným formátem dat:
 | Technologie | SwiftUI, WidgetKit | Avalonia (.NET) |
 | Widget na ploše | ano | ne |
 | Kde žije | ikona v menu baru + okno | ikona v systémové liště + okno |
-| Instalace | ke stažení z [Releases](../../releases) | Nix flake |
+| Instalace | ke stažení z [Releases](../../releases) | AppImage, .deb nebo Nix flake |
+| Aktualizace | novou verzi stáhneš z Releases | AppImage sám z aplikace, jinak jak jsi instaloval |
 
 ## Co umí
 
@@ -49,19 +51,38 @@ sestavuje podle [`macos/README.md`](macos/README.md).
 
 ### Linux
 
-Přes Nix s flakes:
+Na [stránce posledního vydání](../../releases/latest) jsou tři možnosti (zatím jen pro x86-64):
 
-```sh
-nix profile install github:SafarVitek/GitlabTodo
-```
+- **AppImage**, jeden soubor, který se sám aktualizuje. Stáhni
+  [`GitLabTodo-x86_64.AppImage`](../../releases/latest/download/GitLabTodo-x86_64.AppImage), ulož ho třeba
+  do `~/Applications`, povol spouštění a spusť:
 
-Jen vyzkoušet bez instalace jde `nix run github:SafarVitek/GitlabTodo`, s ukázkovými daty
-`nix run github:SafarVitek/GitlabTodo -- --preview`. Na NixOS nebo v Home Manageru přidej flake do inputs
-a balíček `packages.${system}.default` (nebo overlay `overlays.default`) do svých balíčků.
+  ```sh
+  chmod +x ~/Applications/GitLabTodo-x86_64.AppImage
+  ~/Applications/GitLabTodo-x86_64.AppImage
+  ```
 
-Aplikace se spouští jako „GitLab Todo“ z menu aplikací nebo příkazem `gitlab-todo`. Po zavření okna
-běží dál v systémové liště, na GNOME k tomu potřebuješ rozšíření AppIndicator. Víc v
+  Při prvním spuštění se přidá do menu aplikací. Potřebuje FUSE, které běžné distribuce mají; když chybí,
+  spusť ho s `--appimage-extract-and-run`.
+- **Debian a Ubuntu**: [`gitlab-todo_amd64.deb`](../../releases/latest/download/gitlab-todo_amd64.deb),
+  instalace `sudo apt install ./gitlab-todo_amd64.deb`. Novější verzi nainstaluješ stejně.
+- **Nix** s flakes: `nix profile install github:SafarVitek/GitlabTodo`. Jen vyzkoušet bez instalace jde
+  `nix run github:SafarVitek/GitlabTodo`, s ukázkovými daty `nix run github:SafarVitek/GitlabTodo -- --preview`.
+  Na NixOS nebo v Home Manageru přidej flake do inputs a balíček `packages.${system}.default` (nebo overlay
+  `overlays.default`) do svých balíčků.
+
+Aplikace se spouští jako „GitLab Todo“ z menu aplikací, z .deb a Nixu i příkazem `gitlab-todo`. Po zavření
+okna běží dál v systémové liště, na GNOME k tomu potřebuješ rozšíření AppIndicator. Víc v
 [`linux/README.md`](linux/README.md).
+
+### Aktualizace
+
+AppImage se po spuštění a pak každých 12 hodin podívá na GitHub, jestli je novější verze. Když je, ukáže se
+v postranním panelu tlačítko „Aktualizovat na …“ a v nastavení v sekci Aktualizace „Nainstalovat a
+restartovat“. Stažený soubor se nainstaluje, jen když nese podpis vydání GitLab Todo (ECDSA P-256, klíč
+v [`Updates.cs`](linux/GitLabTodo.Core/Updates.cs)), a nic se neinstaluje bez kliknutí. Kontrolu jde v
+nastavení vypnout. Instalace z .deb a Nixu se aktualizují tak, jak byly nainstalované, aplikace jen ukáže
+svou verzi. Stejně tak macOS verze, tu stáhneš znovu z Releases.
 
 ## Synchronizace mezi počítači
 
@@ -76,6 +97,23 @@ obou vyhraje novější. Tokeny ani nastavení se nesynchronizují. Repozitář 
 
 V nastavení přidáš URL GitLabu a Personal Access Token se scope `api`, který je potřeba na vytváření
 větví a merge requestů.
+
+## Vydání nové verze
+
+1. Zvyš verzi na třech místech: `linux/GitLabTodo/GitLabTodo.csproj`, `linux/package.nix` a
+   `macos/project.yml`.
+2. Commit, push, a tag se zprávou o tom, co je nového (zobrazí se ve vydání i v aplikaci u aktualizace):
+
+   ```sh
+   git tag -a v0.3.0 -m "Co je nového…"
+   git push origin v0.3.0
+   ```
+
+Workflow [`release.yml`](.github/workflows/release.yml) sestaví AppImage, .deb a macOS aplikaci, AppImage
+spustí na virtuálním displeji, .deb nainstaluje a spustí, AppImage podepíše a zveřejní vydání s
+`latest.json`, ze kterého si aplikace aktualizaci bere. Podpisový klíč je v secretu `UPDATE_SIGNING_KEY`
+repozitáře. Ručně spuštěné workflow (Actions → Release → Run workflow) všechno sestaví a otestuje, ale
+nic nezveřejní.
 
 ## Licence
 

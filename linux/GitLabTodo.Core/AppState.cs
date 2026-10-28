@@ -105,6 +105,7 @@ public sealed class AppState
     public bool KeepInTray => settings.KeepInTray;
     public double TimelineZoom => settings.TimelineZoom;
     public string Theme => settings.Theme;
+    public bool CheckUpdates => settings.CheckUpdates;
 
     public string? Token(Guid accountId) => tokens.GetValueOrDefault(accountId);
 
@@ -1211,6 +1212,13 @@ public sealed class AppState
     public void SetKeepInTray(bool keep)
     {
         settings.KeepInTray = keep;
+        SaveSettings();
+        Changed?.Invoke();
+    }
+
+    public void SetCheckUpdates(bool check)
+    {
+        settings.CheckUpdates = check;
         SaveSettings();
         Changed?.Invoke();
     }

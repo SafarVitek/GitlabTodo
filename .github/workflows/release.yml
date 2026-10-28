@@ -1,0 +1,151 @@
+name: Release
+
+# A tag v1.2.3 builds the Linux AppImage and .deb and the macOS app, signs the AppImage for the in-app updates and
+# publishes them as a GitHub release; the tag's message becomes the release notes. The tag must match the version in
+# linux/GitLabTodo/GitLabTodo.csproj, linux/package.nix and macos/project.yml. Run by hand, the workflow builds and
+# tests the same files without releasing them.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    env:
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Versions match the tag
+        run: |
+          linux=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' linux/GitLabTodo/GitLabTodo.csproj)
+          nix=$(sed -n 's/^ *version = "\(.*\)";/\1/p' linux/package.nix)
+          macos=$(sed -n 's/^ *MARKETING_VERSION: "\(.*\)"/\1/p' macos/project.yml)
+          echo "csproj $linux, package.nix $nix, project.yml $macos"
+          if [ "$linux" != "$nix" ] || [ "$linux" != "$macos" ]; then
+            echo "::error::The versions differ"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$linux" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $linux"
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: AppImage and .deb
+        run: linux/packaging/build.sh dist
+
+      - name: Sign the AppImage
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          image=dist/GitLabTodo-x86_64.AppImage
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            if [ "$GITHUB_REF_TYPE" = tag ]; then
+              echo "::error::The UPDATE_SIGNING_KEY secret is missing; installed AppImages only update to signed releases"
+              exit 1
+            fi
+            echo "::warning::No UPDATE_SIGNING_KEY secret, the AppImage is not signed"
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$RUNNER_TEMP/key.pem"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/key.pem" -out "$image.sig" "$image"
+          rm "$RUNNER_TEMP/key.pem"
+          # Against the key built into the app: a secret that does not match would make every update fail there.
+          {
+            echo "-----BEGIN PUBLIC KEY-----"
+            sed -n 's/.*"\(MFkw[^"]*\)".*/\1/p' linux/GitLabTodo.Core/Updates.cs | fold -w 64
+            echo "-----END PUBLIC KEY-----"
+          } > "$RUNNER_TEMP/public.pem"
+          openssl dgst -sha256 -verify "$RUNNER_TEMP/public.pem" -signature "$image.sig" "$image"
+
+      - name: Both start under a virtual display
+        # Still running after 20 s, so they came up without crashing; installing the .deb checks its dependencies.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb ./dist/gitlab-todo_amd64.deb
+          set +e
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 20 dist/GitLabTodo-x86_64.AppImage --preview
+          appimage=$?
+          xvfb-run -a timeout 20 gitlab-todo --preview
+          deb=$?
+          echo "AppImage $appimage, .deb $deb"
+          [ "$appimage" -eq 124 ] && [ "$deb" -eq 124 ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Logic tests
+        run: macos/scripts/test.sh
+
+      - name: App
+        working-directory: macos
+        run: |
+          brew install xcodegen
+          xcodegen generate --quiet
+          xcodebuild -project GitLabTodo.xcodeproj -scheme GitLabTodo -configuration Release \
+            -destination 'generic/platform=macOS' -derivedDataPath build -quiet build
+          mkdir -p ../dist
+          ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Release/GitLabTodo.app ../dist/GitLabTodo-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: [linux, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The checkout has the tag without its message.
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          git tag -l --format='%(contents)' "$TAG" > "$RUNNER_TEMP/changes.md"
+          # What the app shows next to „Nainstalovat a restartovat“, and where it downloads from.
+          jq -n \
+            --arg version "${TAG#v}" \
+            --rawfile notes "$RUNNER_TEMP/changes.md" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/GitLabTodo-x86_64.AppImage" \
+            --arg signature "$(base64 -w0 dist/GitLabTodo-x86_64.AppImage.sig)" \
+            '{version: $version, notes: ($notes | rtrimstr("\n")), pub_date: $date,
+              platforms: {"linux-x86_64": {url: $url, signature: $signature}}}' > dist/latest.json
+          rm dist/GitLabTodo-x86_64.AppImage.sig
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          cat "$RUNNER_TEMP/changes.md" .github/release-install.md > "$RUNNER_TEMP/notes.md"
+          # A draft first, so the latest release never lacks its latest.json.
+          gh release create "$TAG" --verify-tag --draft --title "GitLab Todo ${TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" dist/*
+          gh release edit "$TAG" --draft=false --latest

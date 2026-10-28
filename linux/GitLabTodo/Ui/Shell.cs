@@ -30,6 +30,7 @@ public sealed class Shell
         this.desktop = desktop;
         this.state = state;
         this.ui = ui;
+        Updater = new Updater(state, Quit);
         // The tray menu is rebuilt at most twice a second, not on every change.
         trayUpdate = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) =>
         {
@@ -38,16 +39,21 @@ public sealed class Shell
         });
     }
 
-    public void Start(bool showsWindow, bool listens)
+    public Updater Updater { get; }
+
+    /// A preview shows sample data and leaves the system alone: no single instance, menu entry or updates.
+    public void Start(bool showsWindow, bool isPreview)
     {
         tray = new TrayIcon { Icon = icon, ToolTipText = "GitLab Todo", IsVisible = true };
         tray.Clicked += (_, _) => ShowMain();
         TrayIcon.SetIcons(application, [tray]);
         UpdateTray();
         state.Changed += () => trayUpdate.Start();
-        if (listens)
+        if (!isPreview)
         {
             SingleInstance.Listen(() => Dispatcher.UIThread.Post(ShowMain));
+            AppImage.AddToMenu();
+            Updater.Start();
         }
         if (showsWindow)
         {
