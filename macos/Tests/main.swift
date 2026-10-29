@@ -72,6 +72,23 @@ do {
     let looped = schedule()
     check(looped.lanes.flatMap(\.blocks).count == tm.items.count + tm.timelineExternal.count && looped.stepCount < 40, "a dependency loop does not hang the schedule")
 
+    // Lanes in the user's order: a lane dropped on another takes its place, the rest follow the placed ones.
+    let om = AppModel(preview: .preview)
+    @MainActor func laneNames() -> [String] { om.timelineSchedule().lanes.map(\.name) }
+    @MainActor func laneKey(_ name: String) -> String { om.timelineSchedule().lanes.first { $0.name == name }!.key }
+    om.moveLane(laneKey("docs"), onto: laneKey("backend"))
+    check(laneNames() == ["docs", "backend", "frontend", "infra", "platform"] && om.hasLaneOrder, "dragged up, a lane goes above the one it is dropped on: \(laneNames())")
+    om.moveLane(laneKey("docs"), onto: laneKey("infra"))
+    check(laneNames() == ["backend", "frontend", "infra", "docs", "platform"], "dragged down, below it: \(laneNames())")
+    om.moveLane(laneKey("platform"), by: -1)
+    check(laneNames() == ["backend", "frontend", "infra", "platform", "docs"], "one up from the menu: \(laneNames())")
+    let partly = TimelineSchedule.build(items: om.items, external: om.timelineExternal, positions: om.orderPositions, laneOrder: [laneKey("infra"), "gone:1", laneKey("docs")])
+    check(partly.lanes.map(\.name) == ["infra", "docs", "backend", "frontend", "platform"], "lanes not in the order follow the placed ones, most urgent first")
+    check(TimelineLane.key(fromPayload: om.timelineSchedule().lanes[0].dragPayload) == laneKey("backend") && TimelineLane.key(fromPayload: tid("backend#12")) == nil,
+        "a dragged lane is told apart from a dragged block")
+    om.resetLaneOrder()
+    check(laneNames() == ["backend", "frontend", "infra", "docs", "platform"] && !om.hasLaneOrder, "„Seřadit řádky automaticky“ goes back to the most urgent first")
+
     // Arrows from a block's dot, also between two GitLabs.
     let second = UUID()
     let foreign = TodoItem(
@@ -221,6 +238,10 @@ let notesMerged = PlanSync.merge(
 check(notesMerged.notes["n"] == newer && notesMerged.notes["gone"] == nil, "notes: the newer edit wins, a deletion on the other side applies")
 let keptNote = PlanSync.merge(base: Plan(notes: ["n": older]), local: Plan(notes: ["n": newer]), remote: Plan())
 check(keptNote.notes["n"] == newer, "a note edited here is not lost to a deletion elsewhere")
+let lanesMerged = PlanSync.merge(base: Plan(lanes: ["a", "b"]), local: Plan(lanes: ["b", "a"]), remote: Plan(lanes: ["a", "b", "c"]))
+check(lanesMerged.lanes == ["b", "c", "a"], "lane order: reordered here, a lane added elsewhere: \(lanesMerged.lanes)")
+let oldPlan = try! JSONDecoder().decode(Plan.self, from: Data(#"{"order": ["x"]}"#.utf8))
+check(oldPlan.lanes.isEmpty && oldPlan.order == ["x"], "a plan from before lane order reads with none")
 }
 
 // Two devices syncing through one repository file.

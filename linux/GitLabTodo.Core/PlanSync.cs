@@ -105,6 +105,7 @@ public static class PlanSync
         Notes = MergeEntries(@base.Notes, local.Notes, remote.Notes, (mine, theirs) =>
             // Text is never dropped for a deletion on the other side.
             mine is null || theirs is null ? mine ?? theirs : mine.UpdatedAt >= theirs.UpdatedAt ? mine : theirs),
+        Lanes = MergeOrder(@base.Lanes, local.Lanes, remote.Lanes),
     };
 
     public static Dictionary<string, T> MergeEntries<T>(
@@ -213,6 +214,7 @@ public static class PlanSync
         Tracked = plan.Tracked.ToList(),
         Delays = plan.Delays.OrderBy(d => d.Key, StringComparer.Ordinal).ToDictionary(),
         Notes = plan.Notes.OrderBy(n => n.Key, StringComparer.Ordinal).ToDictionary(),
+        Lanes = plan.Lanes.ToList(),
     };
 
     // MARK: Syncing

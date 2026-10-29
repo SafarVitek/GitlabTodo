@@ -62,6 +62,13 @@ struct TimelineLane: Identifiable {
     var blocks: [TimelineBlock] = []
 
     var id: String { key }
+
+    /// What dragging the lane by its name carries, told apart from the ID a dragged block carries.
+    var dragPayload: String { "lane:\(key)" }
+
+    static func key(fromPayload payload: String) -> String? {
+        payload.hasPrefix("lane:") ? String(payload.dropFirst("lane:".count)) : nil
+    }
 }
 
 /// Lanes per project with their items in work order. Every block is one step long and starts only after the block
@@ -70,7 +77,9 @@ struct TimelineSchedule {
     var lanes: [TimelineLane]
     var stepCount: Int
 
-    static func build(items: [TodoItem], external: [ExternalBlocker], positions: [String: Int], delays: [String: Int] = [:]) -> TimelineSchedule {
+    static func build(
+        items: [TodoItem], external: [ExternalBlocker], positions: [String: Int], delays: [String: Int] = [:], laneOrder: [String] = []
+    ) -> TimelineSchedule {
         var lanes: [String: TimelineLane] = [:]
         var keys: [String: Double] = [:]
         let unplacedStart = (positions.values.max() ?? -1) + 1
@@ -104,9 +113,11 @@ struct TimelineSchedule {
             keepBehindBlockers(&lane.blocks)
             return lane
         }
-        // The project with the most urgent own item first, projects of other people only after the user's.
+        // The user's order of the lanes first. The rest by the most urgent own item, projects of other people only after
+        // the user's.
+        let placed = Dictionary(laneOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         let laneRank = { (lane: TimelineLane) in lane.blocks.compactMap { $0.item.flatMap { keys[$0.id] } }.min() ?? .infinity }
-        sorted.sort { (laneRank($0), $0.name) < (laneRank($1), $1.name) }
+        sorted.sort { (placed[$0.key] ?? .max, laneRank($0), $0.name) < (placed[$1.key] ?? .max, laneRank($1), $1.name) }
 
         let (steps, delayedUntil) = schedule(sorted)
         for laneIndex in sorted.indices {
@@ -324,7 +335,9 @@ struct LaneTimeline: View {
     @Binding var selection: String?
 
     var body: some View {
-        let schedule = TimelineSchedule.build(items: model.items, external: model.timelineExternal, positions: model.orderPositions, delays: model.timelineDelays)
+        let schedule = TimelineSchedule.build(
+            items: model.items, external: model.timelineExternal, positions: model.orderPositions, delays: model.timelineDelays,
+            laneOrder: model.timelineLaneOrder)
         // One empty step at the end to drop blocks behind the last one.
         let steps = max(schedule.stepCount + 1, 4)
         let metrics = TimelineMetrics(zoom: zoom)
@@ -385,7 +398,7 @@ struct TimelineContent: View {
             }
             DependencyArrows(schedule: schedule, size: size, metrics: metrics)
             ForEach(Array(schedule.lanes.enumerated()), id: \.element.id) { index, lane in
-                LaneRow(lane: lane, index: index, metrics: metrics, selection: $selection)
+                LaneRow(lane: lane, index: index, laneCount: schedule.lanes.count, metrics: metrics, selection: $selection)
             }
             // The dots on the right edge of every block, dragged out into a „waits on“ arrow.
             ForEach(Array(schedule.lanes.enumerated()), id: \.element.id) { index, lane in
@@ -679,6 +692,10 @@ private struct LaneBackground: View {
             .fill(Color.primary.opacity(isTargeted ? 0.08 : 0.03))
             .frame(width: width - metrics.padding * 2 + inset * 2, height: metrics.blockHeight + inset * 2)
             .dropDestination(for: String.self) { ids, location in
+                if let moved = ids.first.flatMap(TimelineLane.key(fromPayload:)) {
+                    model.moveLane(moved, onto: lane.key)
+                    return true
+                }
                 guard let dragged = ids.first, laneIDs.contains(dragged) else { return false }
                 // The location is relative to the background, which starts a little left of the lane.
                 model.placeInTimeline(dragged, atStep: metrics.step(at: location.x + metrics.padding - inset), laneIDs: laneIDs)
@@ -694,9 +711,12 @@ private struct LaneBackground: View {
 }
 
 private struct LaneRow: View {
+    @Environment(AppModel.self) private var model
     @State private var isAdding = false
+    @State private var isTargeted = false
     let lane: TimelineLane
     let index: Int
+    let laneCount: Int
     let metrics: TimelineMetrics
     @Binding var selection: String?
 
@@ -718,6 +738,7 @@ private struct LaneRow: View {
                     .font(metrics.font(14))
             }
             .buttonStyle(.borderless)
+            .pointerStyle(.default)
             .help("Přidat cizí issue nebo MR z \(lane.name)")
             .popover(isPresented: $isAdding, arrowEdge: .bottom) {
                 LaneSearch(lane: lane)
@@ -726,6 +747,34 @@ private struct LaneRow: View {
         .padding(.leading, metrics.scaled(10))
         .padding(.trailing, metrics.scaled(14))
         .frame(width: metrics.headerWidth, height: metrics.blockHeight)
+        .background {
+            if isTargeted {
+                RoundedRectangle(cornerRadius: metrics.scaled(9), style: .continuous).fill(Color.primary.opacity(0.06))
+            }
+        }
+        .contentShape(Rectangle())
+        .pointerStyle(.grabIdle)
+        .help("Přetáhni nahoru nebo dolů pro změnu pořadí řádků")
+        // By its name the lane moves up or down: dropped on another lane, it takes that lane's place.
+        .draggable(lane.dragPayload) {
+            LaneDragPreview(lane: lane)
+        }
+        .dropDestination(for: String.self) { payloads, _ in
+            guard let moved = payloads.first.flatMap(TimelineLane.key(fromPayload:)) else { return false }
+            model.moveLane(moved, onto: lane.key)
+            return true
+        } isTargeted: {
+            isTargeted = $0
+        }
+        .contextMenu {
+            Button("Posunout výš") { model.moveLane(lane.key, by: -1) }
+                .disabled(index == 0)
+            Button("Posunout níž") { model.moveLane(lane.key, by: 1) }
+                .disabled(index == laneCount - 1)
+            Divider()
+            Button("Seřadit řádky automaticky") { model.resetLaneOrder() }
+                .disabled(!model.hasLaneOrder)
+        }
         .offset(x: metrics.padding, y: y)
 
         ForEach(gaps, id: \.step) { gap in
@@ -766,6 +815,26 @@ private struct LaneRow: View {
             next = block.slot + 1
         }
         return gaps
+    }
+}
+
+/// A lane's name under the pointer while the lane is dragged.
+private struct LaneDragPreview: View {
+    let lane: TimelineLane
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        HStack(spacing: 6) {
+            Circle()
+                .fill(Palette.project(lane.color))
+                .frame(width: 9, height: 9)
+            Text(lane.name)
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(shape.fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(shape.strokeBorder(Color.accentColor, lineWidth: 2))
     }
 }
 
@@ -855,7 +924,9 @@ private struct BlockView: View, Equatable {
         .draggable(block.id)
         .dropDestination(for: String.self) { ids, _ in
             guard let dragged = ids.first, dragged != block.id else { return false }
-            if laneIDs.contains(dragged) {
+            if let moved = TimelineLane.key(fromPayload: dragged) {
+                model.moveLane(moved, onto: block.laneKey)
+            } else if laneIDs.contains(dragged) {
                 model.placeInLane(dragged, onto: block.id, laneIDs: laneIDs)
             } else {
                 model.linkInTimeline(dragged, onto: block.id)

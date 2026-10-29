@@ -15,6 +15,8 @@ struct Plan: Codable, Equatable, Sendable {
     var delays: [String: Int] = [:]
     /// The user's notes on items, kept after the item is done.
     var notes: [String: ItemNote] = [:]
+    /// Timeline lanes (`<account>:<project>`) in the order the user put them in; the others follow.
+    var lanes: [String] = []
 }
 
 extension Plan {
@@ -27,6 +29,7 @@ extension Plan {
         tracked = try container.decodeIfPresent([ExternalBlocker].self, forKey: .tracked) ?? []
         delays = try container.decodeIfPresent([String: Int].self, forKey: .delays) ?? [:]
         notes = try container.decodeIfPresent([String: ItemNote].self, forKey: .notes) ?? [:]
+        lanes = try container.decodeIfPresent([String].self, forKey: .lanes) ?? []
     }
 }
 
@@ -69,6 +72,7 @@ final class AppModel {
     /// Place of each item, own or not, in the work order.
     private(set) var orderPositions: [String: Int] = [:]
     private(set) var timelineDelays: [String: Int] = [:]
+    private(set) var timelineLaneOrder: [String] = []
     /// An item whose notes open for writing once it is shown, e.g. after a click in the widget.
     private(set) var noteToEdit: String?
     /// Syncing the plan through a GitLab repository, nil while it is off.
@@ -324,6 +328,7 @@ final class AppModel {
         timelineExternal = external
         orderPositions = position
         timelineDelays = plan.delays
+        timelineLaneOrder = plan.lanes
         publishSnapshot()
     }
 
@@ -716,7 +721,40 @@ final class AppModel {
     }
 
     func timelineSchedule() -> TimelineSchedule {
-        TimelineSchedule.build(items: items, external: timelineExternal, positions: orderPositions, delays: plan.delays)
+        TimelineSchedule.build(items: items, external: timelineExternal, positions: orderPositions, delays: plan.delays, laneOrder: plan.lanes)
+    }
+
+    /// Whether the user put the lanes in an order of their own, rather than the most urgent project first.
+    var hasLaneOrder: Bool {
+        !timelineLaneOrder.isEmpty
+    }
+
+    /// Drag of a lane's name onto another lane: it takes that lane's place, the lanes in between move one up or down.
+    func moveLane(_ key: String, onto targetKey: String) {
+        var order = timelineSchedule().lanes.map(\.key)
+        guard let from = order.firstIndex(of: key), let to = order.firstIndex(of: targetKey), from != to else { return }
+        order.remove(at: from)
+        order.insert(key, at: to)
+        // Lanes not shown now keep their place for when they come back: after the lane they followed.
+        for (index, hidden) in plan.lanes.enumerated() where !order.contains(hidden) {
+            let previous = plan.lanes[..<index].last { order.contains($0) }
+            order.insert(hidden, at: previous.flatMap { order.firstIndex(of: $0) }.map { $0 + 1 } ?? 0)
+        }
+        plan.lanes = order
+        planChanged()
+    }
+
+    /// One lane up or down, from its menu.
+    func moveLane(_ key: String, by offset: Int) {
+        let shown = timelineSchedule().lanes.map(\.key)
+        guard let from = shown.firstIndex(of: key), shown.indices.contains(from + offset) else { return }
+        moveLane(key, onto: shown[from + offset])
+    }
+
+    /// Back to the most urgent project first.
+    func resetLaneOrder() {
+        plan.lanes = []
+        planChanged()
     }
 
     /// Drag onto an empty step of the lane: the item goes behind the blocks starting before that step and waits there,
@@ -909,6 +947,7 @@ final class AppModel {
         prunePlan(accountID: account.id, keeping: [], previous: [])
         // Notes outlive their items, not their GitLab.
         plan.notes = plan.notes.filter { !$0.key.hasPrefix(account.id.uuidString + ":") }
+        plan.lanes.removeAll { $0.hasPrefix(account.id.uuidString + ":") }
         savePlan()
         if syncState?.settings.accountID == account.id {
             configureSync(nil)

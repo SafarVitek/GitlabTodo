@@ -83,6 +83,21 @@ tm.ToggleBlocker(tm.Items.First(i => i.ShortReference == "infra#9"), tm.Items.Fi
 var looped = Schedule();
 Check(looped.Lanes.Sum(l => l.Blocks.Count) == tm.Items.Count + tm.TimelineExternal.Count && looped.StepCount < 40, "a dependency loop does not hang the schedule");
 
+// Lanes in the user's order: a lane dropped on another takes its place, the rest follow the placed ones.
+var lm2 = Preview();
+List<string> LaneNames() => lm2.TimelineSchedule().Lanes.Select(l => l.Name).ToList();
+string LaneKey(string name) => lm2.TimelineSchedule().Lanes.First(l => l.Name == name).Key;
+lm2.MoveLane(LaneKey("docs"), LaneKey("backend"));
+Check(Same(LaneNames(), "docs", "backend", "frontend", "infra", "platform") && lm2.HasLaneOrder, $"dragged up, a lane goes above the one it is dropped on: {string.Join(" ", LaneNames())}");
+lm2.MoveLane(LaneKey("docs"), LaneKey("infra"));
+Check(Same(LaneNames(), "backend", "frontend", "infra", "docs", "platform"), $"dragged down, below it: {string.Join(" ", LaneNames())}");
+lm2.MoveLane(LaneKey("platform"), -1);
+Check(Same(LaneNames(), "backend", "frontend", "infra", "platform", "docs"), $"one up from the menu: {string.Join(" ", LaneNames())}");
+var partly = TimelineSchedule.Build(lm2.Items, lm2.TimelineExternal, lm2.OrderPositions, laneOrder: [LaneKey("infra"), "gone:1", LaneKey("docs")]);
+Check(Same(partly.Lanes.Select(l => l.Name), "infra", "docs", "backend", "frontend", "platform"), "lanes not in the order follow the placed ones, most urgent first");
+lm2.ResetLaneOrder();
+Check(Same(LaneNames(), "backend", "frontend", "infra", "docs", "platform") && !lm2.HasLaneOrder, "„Seřadit řádky automaticky“ goes back to the most urgent first");
+
 // Arrows from a block's dot, also between two GitLabs.
 var second = Guid.NewGuid();
 var foreign = new TodoItem
@@ -261,6 +276,11 @@ var keptNote = PlanSync.Merge(new Plan { Notes = new() { ["n"] = older } }, new 
 Check(keptNote.Notes["n"] == newer, "a note edited here is not lost to a deletion elsewhere");
 var delays = PlanSync.Merge(new Plan { Delays = new() { ["a"] = 1 } }, new Plan { Delays = new() { ["a"] = 1, ["b"] = 2 } }, new Plan());
 Check(delays.Delays.Count == 1 && delays.Delays["b"] == 2, "delays merge per item, a removal elsewhere applies");
+var lanesMerged = PlanSync.Merge(new Plan { Lanes = ["a", "b"] }, new Plan { Lanes = ["b", "a"] }, new Plan { Lanes = ["a", "b", "c"] });
+Check(Same(lanesMerged.Lanes, "b", "c", "a"), $"lane order: reordered here, a lane added elsewhere: {string.Join(" ", lanesMerged.Lanes)}");
+var laneAccount = Guid.NewGuid();
+var translatedLanes = PlanSync.Translate(new Plan { Lanes = [$"{laneAccount.IdString()}:5"] }, new Dictionary<string, string> { [laneAccount.IdString()] = stable });
+Check(Same(translatedLanes.Lanes, $"{stable}:5"), "lanes get the stable account IDs in the repository");
 
 // Two devices syncing through one repository file.
 var deviceA = new GitLabAccount { Name = "GitLab", BaseUrl = "https://gitlab.example.com" };

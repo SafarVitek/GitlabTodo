@@ -27,7 +27,8 @@ Aplikace je ve dvou verzích se stejnými funkcemi a stejným formátem dat:
 - Poznámky k položce, třeba zápis z meetingu, s úkoly psanými jako v GitLabu (`- [ ] …`). Klik na položku
   ve widgetu otevře poznámku rovnou k psaní, widget ukazuje, kolik úkolů je hotových, a ten další na řadě.
 - Timeline: řádek pro každý projekt, kroky „Teď, +1, +2…“, šipky vazeb, mezery tam, kde se čeká nebo
-  kde je položka odložená. Přetahování, vazby šipkou z tečky na bloku, zoom.
+  kde je položka odložená. Přetahování, vazby šipkou z tečky na bloku, zoom. Řádky projektů seřadíš
+  přetažením za název.
 - Jedním kliknutím (s potvrzením) vytvořit k issue větev a draft MR, nebo draft MR označit jako ready
   a přidat výchozího reviewera.
 - Synchronizace mezi počítači (i mezi macOS a Linuxem) přes soubor v repozitáři na tvém GitLabu.
@@ -87,9 +88,9 @@ svou verzi. Stejně tak macOS verze, tu stáhneš znovu z Releases.
 ## Synchronizace mezi počítači
 
 V nastavení v sekci Synchronizace zvol GitLab a repozitář, nebo nech aplikaci založit soukromý
-`gitlab-todo-data`. Pořadí, vazby, odklady, cizí položky v timeline a poznámky se pak ukládají do souboru
-`gitlab-todo.json` v tom repozitáři. Odesílají se při každém obnovení a chvíli po změně, commit vznikne jen
-když se něco změnilo. Na dalším počítači zvol stejný GitLab a repozitář a data se sloučí s tím, co tam už je.
+`gitlab-todo-data`. Pořadí, vazby, odklady, cizí položky v timeline, pořadí jejích řádků a poznámky se pak
+ukládají do souboru `gitlab-todo.json` v tom repozitáři. Odesílají se při každém obnovení a chvíli po změně,
+commit vznikne jen když se něco změnilo. Na dalším počítači zvol stejný GitLab a repozitář a data se sloučí s tím, co tam už je.
 Když se mezitím změní na dvou místech, sloučí se: co změnilo jen jedno zařízení, platí, u poznámky upravené na
 obou vyhraje novější. Tokeny ani nastavení se nesynchronizují. Repozitář nech soukromý, jsou v něm i poznámky.
 

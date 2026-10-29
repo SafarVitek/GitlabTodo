@@ -39,7 +39,7 @@ public sealed class TimelineSchedule
 
     public static TimelineSchedule Build(
         IReadOnlyList<TodoItem> items, IReadOnlyList<ExternalBlocker> external, IReadOnlyDictionary<string, int> positions,
-        IReadOnlyDictionary<string, int>? delays = null)
+        IReadOnlyDictionary<string, int>? delays = null, IReadOnlyList<string>? laneOrder = null)
     {
         delays ??= new Dictionary<string, int>();
         var lanes = new Dictionary<string, TimelineLane>();
@@ -88,10 +88,16 @@ public sealed class TimelineSchedule
                 .ToList();
             KeepBehindBlockers(lane.Blocks);
         }
-        // The project with the most urgent own item first, projects of other people only after the user's.
+        // The user's order of the lanes first. The rest by the most urgent own item, projects of other people only after
+        // the user's.
+        var placed = (laneOrder ?? []).Select((key, index) => (key, index)).DistinctBy(p => p.key).ToDictionary(p => p.key, p => p.index);
         double LaneRank(TimelineLane lane) =>
             lane.Blocks.Where(b => b.Item is not null).Select(b => keys.GetValueOrDefault(b.Id)).DefaultIfEmpty(double.PositiveInfinity).Min();
-        var sorted = lanes.Values.OrderBy(LaneRank).ThenBy(l => l.Name, StringComparer.Ordinal).ToList();
+        var sorted = lanes.Values
+            .OrderBy(l => placed.GetValueOrDefault(l.Key, int.MaxValue))
+            .ThenBy(LaneRank)
+            .ThenBy(l => l.Name, StringComparer.Ordinal)
+            .ToList();
 
         var (steps, delayedUntil) = Schedule(sorted);
         foreach (var block in sorted.SelectMany(l => l.Blocks))

@@ -97,8 +97,8 @@ public sealed class TimelineView : Panel
     }
 }
 
-/// Draws the whole timeline and handles the pointer: selecting, dragging blocks within and between lanes, drawing
-/// „waits on“ arrows from the dots, context menus and the lanes' „+“.
+/// Draws the whole timeline and handles the pointer: selecting, dragging blocks within and between lanes, dragging
+/// lanes up and down by their names, drawing „waits on“ arrows from the dots, context menus and the lanes' „+“.
 internal sealed class TimelineCanvas : Control
 {
     private const double EdgeZone = 56;
@@ -113,6 +113,7 @@ internal sealed class TimelineCanvas : Control
     private Hit hover = Hit.None;
     private LinkDrag? link;
     private BlockDrag? drag;
+    private LaneDrag? laneDrag;
     private Point viewportPointer;
     /// The pointer holding a block or a dot, while it holds it.
     private IPointer? holding;
@@ -136,7 +137,7 @@ internal sealed class TimelineCanvas : Control
     /// waits for the drop.
     public bool Show(TimelineSchedule shown, string? selected, double zoom)
     {
-        if (link is not null || drag is not null)
+        if (link is not null || drag is not null || laneDrag is not null)
         {
             pending = (shown, selected, zoom);
             return false;
@@ -180,11 +181,15 @@ internal sealed class TimelineCanvas : Control
 
     private sealed record PlusHit(TimelineLane Lane) : Hit;
 
+    private sealed record HeaderHit(TimelineLane Lane, int Index) : Hit;
+
     private sealed record ArrowHit(Edge Edge) : Hit;
 
     private sealed record LinkDrag(TimelineBlock From, Point Start, Point Location);
 
     private sealed record BlockDrag(TimelineBlock Block, int Lane, Point Press, Vector Grab, Point Location, bool IsMoving);
+
+    private sealed record LaneDrag(TimelineLane Lane, int Index, Point Press, Point Location, bool IsMoving);
 
     private double HandleSize => Math.Max(12, Metrics.Scaled(16));
 
@@ -207,6 +212,13 @@ internal sealed class TimelineCanvas : Control
             if (Distance(point, PlusCenter(lane)) <= Math.Max(10, m.Scaled(10)))
             {
                 return new PlusHit(schedule.Lanes[lane]);
+            }
+        }
+        for (var lane = 0; lane < schedule.Lanes.Count; lane++)
+        {
+            if (new Rect(Metrics.Padding, Metrics.Y(lane), Metrics.HeaderWidth, Metrics.BlockHeight).Contains(point))
+            {
+                return new HeaderHit(schedule.Lanes[lane], lane);
             }
         }
         if (BlockAt(point) is { } hit)
@@ -255,6 +267,14 @@ internal sealed class TimelineCanvas : Control
             }
         }
         return null;
+    }
+
+    /// The lane a dragged lane would take the place of: the one level with the point, the first or last beyond them.
+    private int LaneTarget(Point point)
+    {
+        var m = Metrics;
+        var lane = (int)Math.Floor((point.Y - m.Padding - m.RulerHeight + m.LaneGap / 2) / (m.BlockHeight + m.LaneGap));
+        return Math.Clamp(lane, 0, schedule.Lanes.Count - 1);
     }
 
     private Point PlusCenter(int lane) =>
@@ -356,13 +376,17 @@ internal sealed class TimelineCanvas : Control
         DrawRuler(context, size);
 
         var targetLane = drag is { IsMoving: true } moving && BlockAt(moving.Location) is null ? LaneAt(moving.Location) : null;
+        var movedLane = laneDrag is { IsMoving: true } lanes ? lanes : null;
         var inset = m.Scaled(4);
         for (var lane = 0; lane < schedule.Lanes.Count; lane++)
         {
             var isTarget = targetLane == lane && drag?.Lane == lane;
             var background = new Rect(m.Padding - inset, m.Y(lane) - inset, size.Width - m.Padding * 2 + inset * 2, m.BlockHeight + inset * 2);
             context.DrawRectangle(Paint.Primary(isTarget ? 0.08 : 0.03), null, new RoundedRect(background, m.Scaled(12)));
-            DrawLaneHeader(context, lane);
+            using (context.PushOpacity(movedLane?.Index == lane ? 0.35 : 1))
+            {
+                DrawLaneHeader(context, lane);
+            }
             DrawGaps(context, lane);
         }
 
@@ -404,6 +428,10 @@ internal sealed class TimelineCanvas : Control
             }
         }
 
+        if (movedLane is not null)
+        {
+            DrawLaneDrag(context, movedLane, size);
+        }
         if (drag is { IsMoving: true } ghost)
         {
             var origin = ghost.Location - ghost.Grab;
@@ -449,6 +477,26 @@ internal sealed class TimelineCanvas : Control
             context.DrawEllipse(Paint.Primary(0.08), null, plus, iconSize * 0.75, iconSize * 0.75);
         }
         Icons.Draw(context, IconKind.PlusCircle, new Rect(plus.X - iconSize / 2, plus.Y - iconSize / 2, iconSize, iconSize), isHovered ? Paint.AccentBrush() : Paint.Secondary);
+    }
+
+    /// A line where the dragged lane would go, and its name following the pointer.
+    private void DrawLaneDrag(DrawingContext context, LaneDrag dragged, Size size)
+    {
+        var m = Metrics;
+        var target = LaneTarget(dragged.Location);
+        if (target != dragged.Index)
+        {
+            // Moving down it goes below the target lane, moving up above it.
+            var y = target > dragged.Index ? m.Y(target) + m.BlockHeight + m.LaneGap / 2 : m.Y(target) - m.LaneGap / 2;
+            context.DrawRectangle(Paint.AccentBrush(), null, new RoundedRect(new Rect(m.Padding, y - 1.5, size.Width - m.Padding * 2, 3), 1.5));
+        }
+        var dy = dragged.Location.Y - dragged.Press.Y;
+        var header = new Rect(m.Padding, m.Y(dragged.Index) + dy, m.HeaderWidth, m.BlockHeight);
+        context.DrawRectangle(Paint.ControlBackground, new Pen(Paint.AccentBrush(), 2), new RoundedRect(header, m.Scaled(9)));
+        using (context.PushTransform(Matrix.CreateTranslation(0, dy)))
+        {
+            DrawLaneHeader(context, dragged.Index);
+        }
     }
 
     /// Steps where the lane stands still: put off by the user, or because the next item waits on something.
@@ -695,6 +743,10 @@ internal sealed class TimelineCanvas : Control
             case PlusHit plus:
                 OpenLaneSearch(plus.Lane);
                 break;
+            case HeaderHit header:
+                laneDrag = new LaneDrag(header.Lane, header.Index, point.Position, point.Position, false);
+                Hold(e.Pointer);
+                break;
             case BlockHit block when e.ClickCount >= 2:
                 state.Ui.Open(block.Block.WebUrl);
                 break;
@@ -714,7 +766,7 @@ internal sealed class TimelineCanvas : Control
     {
         base.OnPointerMoved(e);
         // A release that never arrived: the button is up, so nothing is held any more.
-        if ((link is not null || drag is not null) && (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !IsHolding))
+        if ((link is not null || drag is not null || laneDrag is not null) && (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !IsHolding))
         {
             EndDrags();
         }
@@ -724,6 +776,17 @@ internal sealed class TimelineCanvas : Control
         {
             link = link with { Location = position };
             autoScroll.Start();
+            InvalidateVisual();
+            return;
+        }
+        if (laneDrag is not null)
+        {
+            if (!laneDrag.IsMoving && Distance(position, laneDrag.Press) < 4)
+            {
+                return;
+            }
+            laneDrag = laneDrag with { Location = position, IsMoving = true };
+            Cursor = new Cursor(StandardCursorType.DragMove);
             InvalidateVisual();
             return;
         }
@@ -762,6 +825,10 @@ internal sealed class TimelineCanvas : Control
         {
             Drop(dragged, position);
         }
+        else if (laneDrag is { IsMoving: true } movedLane && LaneTarget(position) is var place && place != movedLane.Index)
+        {
+            state.MoveLane(movedLane.Lane.Key, schedule.Lanes[place].Key);
+        }
         EndDrags();
     }
 
@@ -774,11 +841,11 @@ internal sealed class TimelineCanvas : Control
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
-        if ((link is not null || drag is not null) && !IsHolding)
+        if ((link is not null || drag is not null || laneDrag is not null) && !IsHolding)
         {
             EndDrags();
         }
-        if (hover != Hit.None && link is null && drag is null)
+        if (hover != Hit.None && link is null && drag is null && laneDrag is null)
         {
             hover = Hit.None;
             InvalidateVisual();
@@ -809,6 +876,7 @@ internal sealed class TimelineCanvas : Control
     {
         link = null;
         drag = null;
+        laneDrag = null;
         holding = null;
         autoScroll.Stop();
         Cursor = null;
@@ -897,6 +965,7 @@ internal sealed class TimelineCanvas : Control
     {
         HandleHit => "Přidat vazbu",
         PlusHit plus => $"Přidat cizí issue nebo MR z {plus.Lane.Name}",
+        HeaderHit header => $"{header.Lane.Name}\nPřetáhni nahoru nebo dolů pro změnu pořadí řádků",
         ArrowHit arrow => $"{arrow.Edge.DependentReference} čeká na {arrow.Edge.BlockerReference}. Pravým tlačítkem vazbu odebereš.",
         BlockHit { Block.Item: null } block => $"Cizí: {block.Block.Reference} {block.Block.Title}",
         BlockHit block => $"{block.Block.Title}\nPřetáhni v řádku pro změnu pořadí, na jiný projekt pro vazbu „čeká na“",
@@ -912,6 +981,14 @@ internal sealed class TimelineCanvas : Control
             case ArrowHit arrow:
                 Menus.Open(this, [Menus.Item($"Odebrat vazbu: {arrow.Edge.DependentReference} čeká na {arrow.Edge.BlockerReference}",
                     () => state.RemoveLink(arrow.Edge.DependentId, arrow.Edge.BlockerId))]);
+                break;
+            case HeaderHit header:
+                Menus.Open(this, [
+                    Menus.Item("Posunout výš", () => state.MoveLane(header.Lane.Key, -1), header.Index > 0),
+                    Menus.Item("Posunout níž", () => state.MoveLane(header.Lane.Key, 1), header.Index < schedule.Lanes.Count - 1),
+                    new Separator(),
+                    Menus.Item("Seřadit řádky automaticky", state.ResetLaneOrder, state.HasLaneOrder),
+                ]);
                 break;
             case BlockHit or HandleHit:
                 var block = hit is BlockHit b ? b.Block : ((HandleHit)hit).Block;

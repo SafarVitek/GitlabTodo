@@ -105,7 +105,8 @@ enum PlanSync {
                 // Text is never dropped for a deletion on the other side.
                 guard let local, let remote else { return local ?? remote }
                 return local.updatedAt >= remote.updatedAt ? local : remote
-            })
+            },
+            lanes: mergeOrder(base: base.lanes, local: local.lanes, remote: remote.lanes))
     }
 
     static func mergeEntries<Value: Equatable>(

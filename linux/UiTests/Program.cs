@@ -219,6 +219,22 @@ ScrollTicks(10);
 Check(scrolled > 0 && timelineScroller.Offset.X == scrolled && !autoScroll.IsEnabled, $"a held block scrolls at the edge, the release stops it: {scrolled}");
 ResetScroll();
 
+// Lanes move up and down by their names.
+var laneMetrics = new TimelineMetrics(state.TimelineZoom);
+List<string> LaneOrder() => state.TimelineSchedule().Lanes.Select(l => l.Name).ToList();
+Point LaneName(int lane) => OnCanvas(laneMetrics.Padding + laneMetrics.Scaled(40), laneMetrics.Y(lane) + laneMetrics.BlockHeight / 2);
+var automaticLanes = LaneOrder();
+Drag(LaneName(automaticLanes.Count - 1), LaneName(0));
+Check(LaneOrder().SequenceEqual(automaticLanes.TakeLast(1).Concat(automaticLanes.SkipLast(1))), $"a lane dragged by its name onto the first one goes first: {string.Join(" ", LaneOrder())}");
+Drag(LaneName(0), LaneName(1));
+Check(LaneOrder().SequenceEqual(new[] { automaticLanes[0], automaticLanes[^1] }.Concat(automaticLanes.Skip(1).SkipLast(1))), $"dragged one down, it goes below: {string.Join(" ", LaneOrder())}");
+Click(LaneName(1), MouseButton.Right);
+window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+Pump();
+state.ResetLaneOrder();
+Pump();
+Check(LaneOrder().SequenceEqual(automaticLanes), "and back in the automatic order");
+
 // A theme switch rebuilds the window, settings change the refresh.
 Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
 Pump();

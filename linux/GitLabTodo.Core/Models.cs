@@ -190,6 +190,10 @@ public sealed class Plan
     /// The user's notes on items, kept after the item is done.
     [JsonPropertyName("notes")]
     public Dictionary<string, ItemNote> Notes { get; set; } = [];
+
+    /// Timeline lanes (`<account>:<project>`) in the order the user put them in; the others follow.
+    [JsonPropertyName("lanes")]
+    public List<string> Lanes { get; set; } = [];
 }
 
 /// An action and the item it runs on, which for an issue with a merge request is the merge request.

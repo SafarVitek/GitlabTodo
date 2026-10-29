@@ -12,6 +12,8 @@ liště s tím, co je na řadě. Instalace (AppImage, .deb, Nix) a aktualizace j
 - V timeline přetáhneš blok v řádku projektu jinam, na prázdný krok (odloží se) nebo na blok jiného
   projektu (bude na něj čekat). Vazbu nakreslíš tažením z oranžové tečky na pravém okraji bloku, odebereš
   ji pravým tlačítkem na šipce. „+“ u projektu přidá cizí issue nebo MR.
+- Řádek projektu v timeline přesuneš nahoru nebo dolů přetažením za jeho název. Pravé tlačítko na názvu
+  nabídne „Posunout výš/níž“ a „Seřadit řádky automaticky“ (projekt s nejnaléhavější položkou nahoře).
 - Zoom timeline: Ctrl + kolečko, Ctrl + / Ctrl − / Ctrl 0.
 - Poznámky k položce (třeba zápis z meetingu) jsou v detailu, úkoly se píšou jako `- [ ] text` a odškrtávají
   se rovnou v náhledu. Klik na položku v nabídce v liště otevře poznámku k psaní.
@@ -25,7 +27,8 @@ liště s tím, co je na řadě. Instalace (AppImage, .deb, Nix) a aktualizace j
 - `~/.config/gitlab-todo/settings.json`: připojené GitLaby a nastavení.
 - `~/.config/gitlab-todo/tokens.json`: tokeny, čitelné jen pro tebe (práva 600). Nejsou v klíčence
   systému, aby aplikace nepotřebovala žádnou další službu.
-- `~/.local/share/gitlab-todo/plan.json`: pořadí, vazby, odklady, poznámky a cizí položky v timeline. Formát je
+- `~/.local/share/gitlab-todo/plan.json`: pořadí, vazby, odklady, poznámky, cizí položky a pořadí řádků
+  v timeline. Formát je
   stejný jako u macOS verze.
 - `~/.local/share/gitlab-todo/snapshot.json`: poslední stažený stav, aby seznam nebyl po startu prázdný.
 - `~/.local/share/gitlab-todo/sync.json`: nastavení synchronizace a stav posledního sloučení, když je zapnutá

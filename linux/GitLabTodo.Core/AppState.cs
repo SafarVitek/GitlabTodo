@@ -914,7 +914,54 @@ public sealed class AppState
         Move(laneIds, [from], destination);
     }
 
-    public TimelineSchedule TimelineSchedule() => Core.TimelineSchedule.Build(Items, TimelineExternal, OrderPositions, plan.Delays);
+    public TimelineSchedule TimelineSchedule() => Core.TimelineSchedule.Build(Items, TimelineExternal, OrderPositions, plan.Delays, plan.Lanes);
+
+    /// Whether the user put the lanes in an order of their own, rather than the most urgent project first.
+    public bool HasLaneOrder => plan.Lanes.Count > 0;
+
+    /// Drag of a lane's name onto another lane: it takes that lane's place, the lanes in between move one up or down.
+    public void MoveLane(string key, string targetKey)
+    {
+        var order = TimelineSchedule().Lanes.Select(l => l.Key).ToList();
+        var from = order.IndexOf(key);
+        var to = order.IndexOf(targetKey);
+        if (from < 0 || to < 0 || from == to)
+        {
+            return;
+        }
+        order.RemoveAt(from);
+        order.Insert(to, key);
+        // Lanes not shown now keep their place for when they come back: after the lane they followed.
+        for (var index = 0; index < plan.Lanes.Count; index++)
+        {
+            var hidden = plan.Lanes[index];
+            if (!order.Contains(hidden))
+            {
+                var previous = plan.Lanes.Take(index).LastOrDefault(order.Contains);
+                order.Insert(previous is null ? 0 : order.IndexOf(previous) + 1, hidden);
+            }
+        }
+        plan.Lanes = order;
+        PlanChanged();
+    }
+
+    /// One lane up or down, from its menu.
+    public void MoveLane(string key, int offset)
+    {
+        var shown = TimelineSchedule().Lanes.Select(l => l.Key).ToList();
+        var to = shown.IndexOf(key) + offset;
+        if (shown.Contains(key) && to >= 0 && to < shown.Count)
+        {
+            MoveLane(key, shown[to]);
+        }
+    }
+
+    /// Back to the most urgent project first.
+    public void ResetLaneOrder()
+    {
+        plan.Lanes = [];
+        PlanChanged();
+    }
 
     /// Drag onto an empty step of the lane: the item goes behind the blocks starting before that step and waits there,
     /// as long as nothing it waits on keeps it later anyway.
@@ -1193,6 +1240,7 @@ public sealed class AppState
         PrunePlan(account.Id, [], []);
         // Notes outlive their items, not their GitLab.
         plan.Notes = plan.Notes.Where(n => !n.Key.StartsWith(account.Id.IdString() + ":", StringComparison.Ordinal)).ToDictionary();
+        plan.Lanes.RemoveAll(l => l.StartsWith(account.Id.IdString() + ":", StringComparison.Ordinal));
         SavePlan();
         if (syncState?.Settings.AccountId == account.Id)
         {
