@@ -288,6 +288,21 @@ appImageSettings.Show();
 Pump();
 Button UpdateAction() => Updates(appImageSettings).GetVisualDescendants().OfType<Button>().Single(b => b is not ToggleSwitch);
 Check(UpdateAction().Content as string == "Nainstalovat a restartovat" && Texts(Updates(appImageSettings)).Contains("GitLab Todo 9.9.9 je k dispozici"), "an AppImage offers to install the newer release");
+// Some desktops make a window narrower than it asks to be: nothing may stick out of it then.
+var narrowPicker = appImageSettings.GetVisualDescendants().OfType<SyncSection>().First().GetVisualDescendants().OfType<ComboBox>().First();
+narrowPicker.SelectedIndex = 1;
+foreach (var width in new[] { 540, 420, 360 })
+{
+    appImageSettings.Width = width;
+    Pump();
+    // Text scrolled inside a field is clipped by it.
+    var outside = appImageSettings.GetVisualDescendants().OfType<Control>().Where(c => c.IsEffectivelyVisible && c.FindAncestorOfType<TextBox>() is null)
+        .FirstOrDefault(c => c.TranslatePoint(new Point(c.Bounds.Width, 0), appImageSettings)!.Value.X > width + 0.5);
+    Check(outside is null, $"the settings fit {width} px: {outside?.GetType().Name} {(outside as TextBlock)?.Text ?? (outside as ContentControl)?.Content as string}");
+}
+narrowPicker.SelectedIndex = 0;
+appImageSettings.Width = 540;
+Pump();
 Offer(null);
 Check(UpdateAction().Content as string == "Zkontrolovat teď" && SidebarUpdate() is null, "without one it offers a check, and the sidebar button goes away");
 var closeButton = WindowButton(appImageSettings, "Zavřít");

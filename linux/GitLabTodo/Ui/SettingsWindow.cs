@@ -171,13 +171,53 @@ public sealed class SettingsWindow : Window
         return row;
     }
 
-    public static Control Field(string label, Control control)
+    public static Control Field(string label, Control control) => new FieldRow(Views.Label(label, 13), control);
+
+    /// The label beside its control, or above it when the window is too narrow for both, as some desktops make it
+    /// whatever size it asks for.
+    private sealed class FieldRow : Panel
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("150,*") };
-        var text = Views.Label(label, 13);
-        Grid.SetColumn(control, 1);
-        grid.Children.AddRange([text, control]);
-        return grid;
+        private const double LabelWidth = 150;
+        private const double Gap = 6;
+        private readonly Control label;
+        private readonly Control control;
+
+        public FieldRow(Control label, Control control)
+        {
+            this.label = label;
+            this.control = control;
+            Children.AddRange([label, control]);
+        }
+
+        private bool IsStacked(double width) => width < LabelWidth + Math.Max(control.MinWidth, 200);
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            if (IsStacked(availableSize.Width))
+            {
+                label.Measure(availableSize);
+                control.Measure(availableSize);
+                return new Size(Math.Max(label.DesiredSize.Width, control.DesiredSize.Width), label.DesiredSize.Height + Gap + control.DesiredSize.Height);
+            }
+            label.Measure(availableSize.WithWidth(LabelWidth));
+            control.Measure(availableSize.WithWidth(availableSize.Width - LabelWidth));
+            return new Size(LabelWidth + control.DesiredSize.Width, Math.Max(label.DesiredSize.Height, control.DesiredSize.Height));
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            if (IsStacked(finalSize.Width))
+            {
+                label.Arrange(new Rect(0, 0, finalSize.Width, label.DesiredSize.Height));
+                control.Arrange(new Rect(0, label.DesiredSize.Height + Gap, finalSize.Width, control.DesiredSize.Height));
+            }
+            else
+            {
+                label.Arrange(new Rect(0, 0, LabelWidth, finalSize.Height));
+                control.Arrange(new Rect(LabelWidth, 0, finalSize.Width - LabelWidth, finalSize.Height));
+            }
+            return finalSize;
+        }
     }
 
     /// After the change that caused it is done, e.g. a pick in the interval list.

@@ -73,7 +73,9 @@ public sealed class SyncSection : StackPanel
         warning.Foreground = Paint.Waiting();
         warning.Text = "Repozitář není soukromý, poznámky v něm uvidí i ostatní.";
         error.Foreground = Paint.Brush(Palette.Threads);
-        var buttons = Views.Row(8, create, apply);
+        // One under the other where the window is narrow.
+        var buttons = new WrapPanel { ItemSpacing = 8, LineSpacing = 8 };
+        buttons.Children.AddRange([create, apply]);
         repository.Children.AddRange([SettingsWindow.Field("Repozitář", project), buttons]);
         DockPanel.SetDock(syncNow, Dock.Right);
         statusRow.Children.AddRange([syncNow, status]);
