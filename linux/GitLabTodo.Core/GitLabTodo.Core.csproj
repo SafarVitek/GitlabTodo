@@ -13,4 +13,9 @@
     <InternalsVisibleTo Include="GitLabTodo.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- D-Bus for the keyring; the same version Avalonia brings, so the Nix dependencies stay as they are. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+
 </Project>

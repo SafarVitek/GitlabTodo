@@ -359,6 +359,48 @@ Check(Updates.Verify(new MemoryStream(signed), releaseSignature), "a file signed
 signed[0] ^= 1;
 Check(!Updates.Verify(new MemoryStream(signed), releaseSignature), "a changed file does not");
 
+// Tokens: in a file only the user can read where there is no keyring.
+var tokenFolder = Directory.CreateTempSubdirectory("gitlab-todo-tokens");
+var tokenPath = Path.Combine(tokenFolder.FullName, "tokens.json");
+var accountA = new GitLabAccount { Name = "A" };
+var accountB = new GitLabAccount { Name = "B" };
+var fileTokens = new TokenStore(tokenPath, usesKeyring: false);
+File.WriteAllText(tokenPath + ".tmp", "leftover");
+if (!OperatingSystem.IsWindows())
+{
+    File.SetUnixFileMode(tokenPath + ".tmp", UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+}
+await fileTokens.Save(accountA, "token-a");
+await fileTokens.Save(accountB, "token-b");
+var loadedTokens = await fileTokens.Load([accountA, accountB]);
+Check(loadedTokens.Tokens.GetValueOrDefault(accountA.Id) == "token-a" && loadedTokens.Tokens.GetValueOrDefault(accountB.Id) == "token-b"
+    && loadedTokens.Problem is null, "tokens come back from the file");
+Check(OperatingSystem.IsWindows() || File.GetUnixFileMode(tokenPath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite),
+    "the token file is the user's only, even over a readable leftover");
+await fileTokens.Delete(accountA.Id);
+Check((await fileTokens.Load([accountA, accountB])).Tokens.Keys.SequenceEqual([accountB.Id]), "a removed account's token is gone");
+await fileTokens.Delete(accountB.Id);
+Check(!File.Exists(tokenPath), "no file without tokens");
+
+// Run with a keyring, e.g. `dbus-run-session -- sh -c 'echo | gnome-keyring-daemon --unlock; dotnet run'`.
+if (Environment.GetEnvironmentVariable("GITLAB_TODO_TEST_KEYRING") == "1")
+{
+    var keyringTokens = new TokenStore(tokenPath);
+    await fileTokens.Save(accountA, "token-a");
+    var migrated = await keyringTokens.Load([accountA, accountB]);
+    Check(migrated.Tokens.GetValueOrDefault(accountA.Id) == "token-a" && migrated.Problem is null && !File.Exists(tokenPath),
+        $"a token in the file moves to the keyring {migrated.Problem}");
+    await keyringTokens.Save(accountB, "token-b");
+    await keyringTokens.Save(accountA, "token-a2");
+    var kept = await keyringTokens.Load([accountA, accountB]);
+    Check(kept.Tokens.GetValueOrDefault(accountA.Id) == "token-a2" && kept.Tokens.GetValueOrDefault(accountB.Id) == "token-b"
+        && !File.Exists(tokenPath), "the keyring keeps each account's latest token");
+    await keyringTokens.Delete(accountA.Id);
+    await keyringTokens.Delete(accountB.Id);
+    Check((await keyringTokens.Load([accountA, accountB])).Tokens.Count == 0, "removed accounts leave nothing in the keyring");
+}
+tokenFolder.Delete(recursive: true);
+
 Console.WriteLine(failures == 0 ? "ALL PASSED" : $"{failures} FAILED");
 return failures == 0 ? 0 : 1;
 

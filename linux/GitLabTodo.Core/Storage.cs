@@ -70,8 +70,8 @@ public sealed class Settings
     public bool SystemFrame { get; set; }
 }
 
-/// Files under the XDG folders: settings and tokens in `~/.config/gitlab-todo`, the plan and the last refresh in
-/// `~/.local/share/gitlab-todo`.
+/// Files under the XDG folders: settings (and tokens where there is no keyring) in `~/.config/gitlab-todo`, the plan
+/// and the last refresh in `~/.local/share/gitlab-todo`.
 public static class Storage
 {
     public static readonly JsonSerializerOptions Json = new()
@@ -113,15 +113,22 @@ public static class Storage
         }
     }
 
-    /// Written to a temporary file first, so a crash never leaves half a plan behind.
+    /// Written to a temporary file first, so a crash never leaves half a plan behind. A private file is readable only
+    /// by the user from the moment it exists.
     public static void Save<T>(string path, T value, bool isPrivate = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporary = path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(value, Json));
+        // A leftover keeps its mode when overwritten.
+        File.Delete(temporary);
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
         if (isPrivate && !OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        using (var writer = new StreamWriter(temporary, options))
+        {
+            writer.Write(JsonSerializer.Serialize(value, Json));
         }
         File.Move(temporary, path, overwrite: true);
     }

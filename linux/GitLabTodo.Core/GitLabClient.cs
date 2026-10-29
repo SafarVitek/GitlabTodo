@@ -14,6 +14,7 @@ public sealed class GitLabException(string message) : Exception(message)
 {
     public static GitLabException InvalidUrl => new("Neplatná URL GitLabu");
     public static GitLabException MissingToken => new("Chybí access token");
+    public static GitLabException TokenLoading => new("Token se ještě načítá z klíčenky");
     public static GitLabException Unauthorized => new("Neplatný nebo expirovaný token (401)");
     public static GitLabException Forbidden => new("Token na to nemá oprávnění (403), akce potřebují scope api");
     public static GitLabException NotFound => new("Nenalezeno (404)");

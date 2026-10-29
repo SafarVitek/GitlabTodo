@@ -25,8 +25,10 @@ liště s tím, co je na řadě. Instalace (AppImage, .deb, Nix) a aktualizace j
 ## Data
 
 - `~/.config/gitlab-todo/settings.json`: připojené GitLaby a nastavení.
-- `~/.config/gitlab-todo/tokens.json`: tokeny, čitelné jen pro tebe (práva 600). Nejsou v klíčence
-  systému, aby aplikace nepotřebovala žádnou další službu.
+- Tokeny jsou v klíčence systému (GNOME Keyring, KWallet nebo KeePassXC, cokoli nabízí Secret Service),
+  v aplikaci Hesla a klíče (Seahorse) jako „GitLab Todo: <název GitLabu>“. Je-li klíčenka zamčená, systém se
+  při spuštění zeptá na její heslo. Kde žádná není (třeba samotné i3), jsou v `~/.config/gitlab-todo/tokens.json`,
+  čitelném jen pro tebe (práva 600), a jakmile klíčenka funguje, aplikace je do ní sama přesune.
 - `~/.local/share/gitlab-todo/plan.json`: pořadí, vazby, odklady, poznámky, cizí položky a pořadí řádků
   v timeline. Formát je
   stejný jako u macOS verze.

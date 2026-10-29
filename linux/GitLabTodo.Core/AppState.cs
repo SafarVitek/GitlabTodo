@@ -25,7 +25,10 @@ public sealed class AppState
 
     private readonly bool isPreview;
     private readonly Settings settings;
-    private readonly Dictionary<Guid, string> tokens;
+    private readonly Dictionary<Guid, string> tokens = [];
+    private readonly TokenStore tokenStore = new(Storage.TokensPath);
+    private readonly Task tokensLoading = Task.CompletedTask;
+    private string? tokenProblem;
     private readonly Dictionary<Guid, long> userIds = [];
     private Plan plan;
     private Dictionary<Guid, List<TodoItem>> fetchedItems = [];
@@ -40,8 +43,7 @@ public sealed class AppState
     {
         Ui = ui;
         settings = Storage.Load<Settings>(Storage.SettingsPath) ?? new Settings();
-        var stored = Storage.Load<Dictionary<string, string>>(Storage.TokensPath) ?? [];
-        tokens = stored.Where(t => Guid.TryParse(t.Key, out _)).ToDictionary(t => Guid.Parse(t.Key), t => t.Value);
+        tokensLoading = LoadTokens();
         plan = Storage.Load<Plan>(Storage.PlanPath) ?? new Plan();
         syncState = Storage.Load<SyncState>(Storage.SyncPath);
 
@@ -64,7 +66,6 @@ public sealed class AppState
             Accounts = snapshot.Items.Select(i => i.AccountId).Distinct()
                 .Select(id => new GitLabAccount { Id = id, Name = "GitLab", BaseUrl = "https://gitlab.example.com" }).ToList(),
         };
-        tokens = [];
         plan = new Plan
         {
             Order = snapshot.Items.Where(i => i.IsPlaced).Select(i => i.Id).ToList(),
@@ -170,6 +171,7 @@ public sealed class AppState
         Changed?.Invoke();
         try
         {
+            await tokensLoading;
             do
             {
                 refreshPending = false;
@@ -838,11 +840,11 @@ public sealed class AppState
         }
     }
 
-    private static void TrySave<T>(string path, T value, bool isPrivate = false)
+    private static void TrySave<T>(string path, T value)
     {
         try
         {
-            Storage.Save(path, value, isPrivate);
+            Storage.Save(path, value);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -1188,11 +1190,28 @@ public sealed class AppState
         return id;
     }
 
+    /// The keyring may first ask for its password, so the list shows the last known state meanwhile.
+    private async Task LoadTokens()
+    {
+        var loaded = await tokenStore.Load(settings.Accounts.ToList());
+        foreach (var (id, token) in loaded.Tokens)
+        {
+            // One typed in the settings meanwhile is newer.
+            tokens.TryAdd(id, token);
+        }
+        tokenProblem = loaded.Problem;
+    }
+
     private GitLabClient Client(GitLabAccount account)
     {
         var apiUrl = account.ApiUrl ?? throw GitLabException.InvalidUrl;
         var token = tokens.GetValueOrDefault(account.Id);
-        return string.IsNullOrEmpty(token) ? throw GitLabException.MissingToken : new GitLabClient(apiUrl, token);
+        if (string.IsNullOrEmpty(token))
+        {
+            throw !tokensLoading.IsCompleted ? GitLabException.TokenLoading
+                : tokenProblem is not null ? new GitLabException(tokenProblem) : GitLabException.MissingToken;
+        }
+        return new GitLabClient(apiUrl, token);
     }
 
     private GitLabClient? TryClient(GitLabAccount account)
@@ -1223,7 +1242,10 @@ public sealed class AppState
         if (token is not null)
         {
             tokens[account.Id] = token;
-            SaveTokens();
+            if (!isPreview)
+            {
+                _ = tokenStore.Save(account, token);
+            }
         }
         userIds.Remove(account.Id);
         SaveSettings();
@@ -1236,7 +1258,10 @@ public sealed class AppState
         settings.Accounts.RemoveAll(a => a.Id == account.Id);
         tokens.Remove(account.Id);
         userIds.Remove(account.Id);
-        SaveTokens();
+        if (!isPreview)
+        {
+            _ = tokenStore.Delete(account.Id);
+        }
         PrunePlan(account.Id, [], []);
         // Notes outlive their items, not their GitLab.
         plan.Notes = plan.Notes.Where(n => !n.Key.StartsWith(account.Id.IdString() + ":", StringComparison.Ordinal)).ToDictionary();
@@ -1302,13 +1327,6 @@ public sealed class AppState
         }
     }
 
-    private void SaveTokens()
-    {
-        if (!isPreview)
-        {
-            TrySave(Storage.TokensPath, tokens.ToDictionary(t => t.Key.IdString(), t => t.Value), isPrivate: true);
-        }
-    }
     // MARK: Sync
 
     /// Turns syncing on with a repository, or off with null. A new repository starts from scratch: the first sync
